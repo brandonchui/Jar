@@ -1,7 +1,7 @@
 <!-- LOGO -->
 <h1>
 <p align="center">
-  <br>Jar - Just Another Renderer
+  <br>Jar (Just Another Renderer)
   
 </h1>
   <p align="center">
@@ -18,9 +18,11 @@
 </p>
 
 <p align="center">
-  <img width="552" height="302" alt="renderer1"
-       src="https://github.com/user-attachments/assets/1c1e86eb-623f-41d2-a268-f83a3220b033" />
+<img width="761" height="481" alt="Screenshot_6289" src="https://github.com/user-attachments/assets/b0acb876-e4c5-4e13-936a-ec951ecca328" />
 </p>
+
+
+
 
 
 
