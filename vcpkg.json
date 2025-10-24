@@ -1,0 +1,16 @@
+{
+  "name": "jar-renderer",
+  "version": "1.0.0",
+  "description": "Just Another Renderer - DirectX 12 dependencies",
+  "dependencies": [
+    {
+      "name": "directxtk12",
+      "platform": "windows"
+    },
+    {
+      "name": "directxmesh",
+      "platform": "windows"
+    }
+  ],
+  "builtin-baseline": "4f8fe05871555c1798dbcb1957d0d595e94f7b57"
+}

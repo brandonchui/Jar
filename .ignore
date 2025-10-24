@@ -1,0 +1,10 @@
+# cmake
+# /shaders
+*.md
+*.ps1
+# CMakeLists.txt
+*.config
+# tests/
+*.json
+thirdparty/
+/assets/

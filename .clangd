@@ -1,0 +1,50 @@
+CompileFlags:
+  CompilationDatabase: build
+  Add:
+    - -std=c++23
+    - -Wno-c++98-compat
+    - -Wno-c++98-compat-pedantic
+    - -Wno-pre-c++14-compat
+    - -Wno-pre-c++17-compat
+    - -Wno-pre-c++20-compat
+    - -Wno-c++17-extensions
+    - -Wno-c++20-extensions
+    - -Wno-c++20-designator
+    - -Wno-c++23-extensions
+    - -Wno-c++2b-extensions
+    - -Wno-padded
+    - -Wall
+    - -Wextra
+    - -Wno-unknown-pragmas
+    - -Wno-unused-parameter
+    - -Wno-unsafe-buffer-usage
+    - -ferror-limit=100
+  Remove:
+    - -W*
+
+Index:
+  Background: Build
+
+Diagnostics:
+  UnusedIncludes: Strict
+  ClangTidy:
+    Add:
+      - modernize-*
+      - performance-*
+      - readability-*
+      - bugprone-*
+    Remove:
+      - modernize-use-trailing-return-type
+      - readability-magic-numbers
+      - readability-braces-around-statements
+      - cppcoreguidelines-pro-type-member-init
+      - readability-identifier-length
+      - readability-function-cognitive-complexity
+
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true
+
+Hover:
+  ShowAKA: true
