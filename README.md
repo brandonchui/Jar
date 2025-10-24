@@ -93,6 +93,7 @@ These are the major features that have higher priority and will get more develop
 | Forward rendering | ✅ |
 | Slang Integration | ✅ |
 | Deferred rendering | ⚠️ |
+| Image based lighting | ❌ |
 | Cluster rendering | ❌ |
 
 
