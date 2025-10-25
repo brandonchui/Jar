@@ -32,36 +32,89 @@ namespace UI
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0F, 0.0F));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0F);
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, AppColors::TITLEBAR_BG);
+		ImGui::PushStyleColor(ImGuiCol_MenuBarBg, AppColors::TITLEBAR_BG);
 
 		ImGuiWindowFlags titleBarFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
 										 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
 										 ImGuiWindowFlags_NoSavedSettings |
-										 ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoNav;
+										 ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoNav |
+										 ImGuiWindowFlags_MenuBar;
 
 		bool titleBarOpen = true;
 		ImGui::Begin("##CustomTitleBar", &titleBarOpen, titleBarFlags);
 
-		// Title text.
-		ImGui::SetCursorPosY(8.0F);
-		ImGui::SetCursorPosX(10.0F);
-		ImGui::Text("%s", title);
-
-		// Min Max Close buttons TODO need to work on the min, max use SDL
-		ImGui::SameLine(ImGui::GetWindowWidth() - BUTTON_WIDTH);
-		ImGui::SetCursorPosY(0.0F);
-
-		// Transparent
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AppColors::CLOSE_BUTTON_HOVER);
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive, AppColors::CLOSE_BUTTON_ACTIVE);
-
-		if (ImGui::Button("X", ImVec2(BUTTON_WIDTH, TITLE_BAR_HEIGHT)))
+		// Menu bar
+		if (ImGui::BeginMenuBar())
 		{
-			state.action = TitleBarAction::Close;
-		}
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 6.0F);
 
-		ImGui::PopStyleColor(3);
+			ImFont* boldFont = UI::GetBoldFont();
+			if (boldFont != nullptr)
+			{
+				ImGui::PushFont(boldFont, 18.0F);
+			}
+
+			ImGui::Text("%s", title);
+
+			if (boldFont != nullptr)
+			{
+				ImGui::PopFont();
+			}
+
+			// Add spacing to differentiate menu from title
+			ImGui::Spacing();
+			ImGui::Spacing();
+
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0F, 12.0F));
+
+			// Style for dropdown menus
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0F, 10.0F));
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0F, 8.0F));
+
+			if (ImGui::BeginMenu("File"))
+			{
+				if (ImGui::MenuItem("Load Model"))
+				{
+					// TODO action
+				}
+				if (ImGui::MenuItem("Exit"))
+				{
+					// TODO action
+				}
+				ImGui::EndMenu();
+			}
+
+			if (ImGui::BeginMenu("Help"))
+			{
+				if (ImGui::MenuItem("About"))
+				{
+					// TODO action
+				}
+				ImGui::EndMenu();
+			}
+
+			ImGui::PopStyleVar(3);
+
+			// Push close button to the right side of menu bar
+			float menuBarHeight = ImGui::GetCurrentWindow()->TitleBarHeight;
+			ImGui::SetCursorPosX(ImGui::GetWindowWidth() - BUTTON_WIDTH);
+
+			// Transparent
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AppColors::CLOSE_BUTTON_HOVER);
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, AppColors::CLOSE_BUTTON_ACTIVE);
+
+			if (ImGui::Button("X", ImVec2(BUTTON_WIDTH, menuBarHeight)))
+			{
+				state.action = TitleBarAction::Close;
+			}
+
+			ImGui::PopStyleColor(3);
+
+			ImGui::EndMenuBar();
+		}
 
 		// Drag title bar.
 		bool titleBarHovered = ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered();
@@ -112,8 +165,8 @@ namespace UI
 		}
 
 		ImGui::End();
-		ImGui::PopStyleColor();
-		ImGui::PopStyleVar(3);
+		ImGui::PopStyleColor(2);
+		ImGui::PopStyleVar(4);
 
 		// Resizing the window.
 		{

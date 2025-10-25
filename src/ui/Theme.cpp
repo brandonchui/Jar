@@ -4,16 +4,20 @@
 
 namespace UI
 {
+	// Store bold font
+	static ImFont* g_BoldFont = nullptr;
+
 	// Custom application colors (not part of ImGui's standard color scheme)
 	namespace AppColors
 	{
 		// Titlebar: Blue-gray to distinguish from main content area
-		const ImVec4 TITLEBAR_BG = ImVec4(0.180F, 0.200F, 0.227F, 1.0F); // Blue-gray #2E333A
-		const ImVec4 CLOSE_BUTTON_HOVER = ImVec4(0.8F, 0.0F, 0.0F, 1.0F); // Red on hover
+		const ImVec4 TITLEBAR_BG = ImVec4(0.180F, 0.200F, 0.227F, 1.0F);   // Blue-gray #2E333A
+		const ImVec4 CLOSE_BUTTON_HOVER = ImVec4(0.8F, 0.0F, 0.0F, 1.0F);  // Red on hover
 		const ImVec4 CLOSE_BUTTON_ACTIVE = ImVec4(0.6F, 0.0F, 0.0F, 1.0F); // Darker red on click
 
 		// Viewport placeholder (dark blue when no texture is loaded)
-		const ImVec4 VIEWPORT_PLACEHOLDER = ImVec4(0.078F, 0.118F, 0.196F, 1.0F); // Dark blue (20, 30, 50)
+		const ImVec4 VIEWPORT_PLACEHOLDER = ImVec4(0.078F, 0.118F, 0.196F,
+												   1.0F); // Dark blue (20, 30, 50)
 	} // namespace AppColors
 	void ApplyMaterialTheme()
 	{
@@ -263,6 +267,7 @@ namespace UI
 		fontConfig.RasterizerMultiply = 1.2F;
 
 		const char* fontPath = "assets/Roboto/static/Roboto-Regular.ttf";
+		const char* boldFontPath = "assets/Roboto/static/Roboto-Bold.ttf";
 
 		std::ifstream fontFile(fontPath);
 		bool fontExists = fontFile.good();
@@ -286,7 +291,22 @@ namespace UI
 			io.Fonts->AddFontDefault(&fontConfig);
 		}
 
+		// Load bold font at larger size for titles
+		std::ifstream boldFontFile(boldFontPath);
+		bool boldFontExists = boldFontFile.good();
+		boldFontFile.close();
+
+		if (boldFontExists)
+		{
+			g_BoldFont = io.Fonts->AddFontFromFileTTF(boldFontPath, 18.0F, &fontConfig);
+		}
+
 		io.FontGlobalScale = 1.0F;
+	}
+
+	ImFont* GetBoldFont()
+	{
+		return g_BoldFont;
 	}
 
 } // namespace UI

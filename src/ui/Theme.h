@@ -20,6 +20,9 @@ namespace UI
 	/// Load custom font.
 	void LoadCustomFont();
 
+	/// Get bold font for titles
+	ImFont* GetBoldFont();
+
 	/// Get custom application colors
 	namespace AppColors
 	{
