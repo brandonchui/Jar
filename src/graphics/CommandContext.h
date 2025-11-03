@@ -40,6 +40,11 @@ namespace Graphics
 		/// bytecode.
 		void SetShader(const std::string& shaderName);
 
+		/// Multi render target version of SetShader(..)
+		void SetShaderMRT(const std::string& shaderName, const DXGI_FORMAT* rtFormats,
+						  uint32_t numRenderTargets,
+						  DXGI_FORMAT depthStencilFormat = DXGI_FORMAT_D32_FLOAT);
+
 		/// Transitions state for the resource given in the parameter.
 		void TransitionResource(GpuResource& resource, D3D12_RESOURCE_STATES newState);
 

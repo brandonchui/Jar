@@ -178,6 +178,82 @@ namespace Graphics
 		}
 	}
 
+	void CommandContext::SetShaderMRT(const std::string& shaderName,
+									  const DXGI_FORMAT* rtFormats,
+									  uint32_t numRenderTargets,
+									  DXGI_FORMAT depthStencilFormat)
+	{
+		InitLogger();
+		std::filesystem::path shaderPath = "shaders/" + shaderName + ".slang";
+
+		if (!std::filesystem::exists(shaderPath))
+		{
+			sLogger->error("Shader file not found: {}", shaderPath.string());
+			assert(false && "Shader file not found");
+			return;
+		}
+
+		sLogger->info("Setting MRT shader: {}", shaderName);
+
+		if (!Graphics::gDevice)
+		{
+			sLogger->error("Graphics::gDevice null");
+			return;
+		}
+
+		sLogger->debug("Calling CompileShaderForPSO...");
+		SlangHelper::CompiledShaderData shaderData =
+			SlangHelper::CompileShaderForPSO(shaderPath, Graphics::gDevice);
+
+		sLogger->debug("Shader compilation results:");
+		sLogger->debug("\tVertex bytecode size: {} bytes", shaderData.vertexBytecode.size());
+		sLogger->debug("\tFragment bytecode size: {} bytes", shaderData.fragBytecode.size());
+		sLogger->debug("\tRoot signature: {}", shaderData.rootSignature ? "YES" : "NO");
+
+		if (!shaderData.vertexBytecode.empty())
+		{
+			sLogger->debug("\tVertex bytecode is valid: {} bytes",
+						   shaderData.vertexBytecode.size());
+		}
+		else
+		{
+			sLogger->error("\tNo vertex bytecode");
+		}
+
+		if (!shaderData.fragBytecode.empty())
+		{
+			sLogger->debug("\tPixel bytecode is valid: {} bytes",
+						   shaderData.fragBytecode.size());
+		}
+		else
+		{
+			sLogger->error("\tNo pixel bytecode");
+		}
+
+		if (shaderData.rootSignature != nullptr)
+		{
+			mRootSignature.Attach(shaderData.rootSignature);
+
+			sLogger->debug("Creating MRT PSO with {} render targets...", numRenderTargets);
+			ID3D12PipelineState* pso = SlangHelper::CreatePSOWithSlangShaderMRT(
+				shaderData, Graphics::gDevice, rtFormats, numRenderTargets, depthStencilFormat);
+
+			if (pso != nullptr)
+			{
+				mPipelineState.Attach(pso);
+				sLogger->info("MRT PSO created and attached");
+			}
+			else
+			{
+				sLogger->error("Failed to create MRT PSO");
+			}
+		}
+		else
+		{
+			sLogger->error("No root signature generated");
+		}
+	}
+
 	void GraphicsContext::SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv)
 	{
 		mCommandList->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
