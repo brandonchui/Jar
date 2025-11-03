@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <string>
 
 #ifdef HAS_SLANG
 #include <slang.h>
@@ -26,6 +27,7 @@ namespace SlangHelper
 
 		ID3D12RootSignature* rootSignature = nullptr;
 		std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout;
+		std::vector<std::string> semanticNames;
 
 		/// We need this function to deal with the slang compilation session
 		/// lifetime issues. Slang uses sessions, basically a cache within a
