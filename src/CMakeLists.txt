@@ -39,6 +39,8 @@ add_executable(Jar
     graphics/DescriptorHeap.h
     graphics/GBuffer.cpp
     graphics/GBuffer.h
+    graphics/ShaderCache.cpp
+    graphics/ShaderCache.h
     graphics/Texture.cpp
     graphics/Texture.h
     graphics/StructuredBuffer.cpp

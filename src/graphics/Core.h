@@ -13,6 +13,7 @@ class CommandListManager;
 namespace Graphics
 {
 	class GraphicsContext;
+	class ShaderCache;
 }
 
 /// Global D3D12 graphics system state and initialization.
@@ -33,6 +34,7 @@ namespace Graphics
 
 	extern CommandListManager* gCommandListManager;
 	extern GraphicsContext* gGraphicsContext;
+	extern ShaderCache* gShaderCache;
 
 	/// Initization for the globals
 	void Init();

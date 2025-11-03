@@ -4,6 +4,7 @@
 #include "DescriptorHeap.h"
 #include "CommandListManager.h"
 #include "CommandContext.h"
+#include "ShaderCache.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include <cstdint>
 #include <dxgi1_6.h>
@@ -32,6 +33,9 @@ namespace Graphics
 	// Global command list management
 	CommandListManager* gCommandListManager = nullptr;
 	GraphicsContext* gGraphicsContext = nullptr;
+
+	// Global shader cache
+	ShaderCache* gShaderCache = nullptr;
 
 	std::shared_ptr<spdlog::logger> gLogger = nullptr;
 
@@ -392,7 +396,8 @@ namespace Graphics
 
 			if (SUCCEEDED(hr))
 			{
-				gLogger->info("MessageBox callback registered for errors, corruption, and warnings");
+				gLogger->info(
+					"MessageBox callback registered for errors, corruption, and warnings");
 			}
 			else
 			{
@@ -482,6 +487,8 @@ void Graphics::Init()
 	InitializeDescriptorAllocators();
 	InitializeCommandSystem();
 
+	gShaderCache = new ShaderCache();
+
 	SetupDebugInfoQueue();
 
 	gLogger->info("Graphics system initialization complete");
@@ -508,6 +515,12 @@ void Graphics::Shutdown()
 		gCommandListManager->Shutdown();
 		delete gCommandListManager;
 		gCommandListManager = nullptr;
+	}
+
+	if (gShaderCache)
+	{
+		delete gShaderCache;
+		gShaderCache = nullptr;
 	}
 
 	for (auto& i : gDescriptorAllocator)
