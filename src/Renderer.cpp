@@ -14,6 +14,10 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
+#ifdef USE_PIX
+#include <WinPixEventRuntime/pix3.h>
+#endif
+
 using namespace Graphics;
 
 void Renderer::InitLogger()
@@ -181,7 +185,7 @@ void Renderer::Initialize(UISystem* uiSystem)
 	// Recall 4 srv, albedo, normal, mellatic, roughness
 	mMaterialTextureSRVStart = mTextureHeap.Alloc(MAX_MATERIALS * 4);
 
-	DescriptorHandle samplerHandle = mSamplerHeap.Alloc(1);
+	mSamplerHandle = mSamplerHeap.Alloc(1);
 	D3D12_SAMPLER_DESC samplerDesc = {};
 	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -192,7 +196,7 @@ void Renderer::Initialize(UISystem* uiSystem)
 	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 	samplerDesc.MinLOD = 0.0F;
 	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
-	Graphics::gDevice->CreateSampler(&samplerDesc, samplerHandle.GetCpuHandle());
+	Graphics::gDevice->CreateSampler(&samplerDesc, mSamplerHandle.GetCpuHandle());
 
 	// Offscreen viewport render target
 	mViewportTexture = std::make_unique<ColorBuffer>();
@@ -204,6 +208,11 @@ void Renderer::Initialize(UISystem* uiSystem)
 	mViewportDepth->Create(L"ViewportDepth", mViewportWidth, mViewportHeight,
 						   DXGI_FORMAT_D32_FLOAT);
 	mViewportDepth->CreateView(Graphics::gDevice);
+
+	// GBuffer for deferred rendering
+	mGBuffer = std::make_unique<GBuffer>();
+	mGBuffer->Create(mViewportWidth, mViewportHeight);
+	mLogger->info("GBuffer created: {}x{}", mViewportWidth, mViewportHeight);
 
 	// SRV for ImGui to sample the viewport texture
 	// NOTE: Allocate from ImGui's heap so it can reference it when rendering
@@ -237,26 +246,42 @@ void Renderer::Update(float deltaTime)
 
 void Renderer::Render(Graphics::GraphicsContext& context)
 {
-	static bool shaderSet = false;
+	DXGI_FORMAT rtFormats[4] = {//
+								// RT0: Albedo/AO
+								DXGI_FORMAT_R8G8B8A8_UNORM,
+								// RT1: Normal/Roughness
+								DXGI_FORMAT_R16G16B16A16_FLOAT,
+								// RT2: Metallic/Flags
+								DXGI_FORMAT_R8G8B8A8_UNORM,
+								// RT3: Emissive
+								DXGI_FORMAT_R16G16B16A16_FLOAT};
 
-	if (!shaderSet)
-	{
-		context.SetShader("Lit");
-		shaderSet = true;
-	}
+	context.SetShaderMRT("GeometryPass", rtFormats, 4, DXGI_FORMAT_D32_FLOAT);
 
 	context.Begin();
 
-	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	context.SetRenderTarget(mViewportTexture->GetRTV(), mViewportDepth->GetDSV());
-	context.ClearColor(mViewportTexture->GetRTV());
-	context.ClearDepth(mViewportDepth->GetDSV());
-	context.SetViewport(mViewport);
-	context.SetScissorRect(mScissorRect);
+#ifdef USE_PIX
+	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(0), L"Frame");
+#endif
+
+	// GEOMETRY PASS
+#ifdef USE_PIX
+	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(1), L"Geometry Pass");
+#endif
+
+	context.TransitionResource(mGBuffer->GetRenderTarget0(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+	context.TransitionResource(mGBuffer->GetRenderTarget1(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+	context.TransitionResource(mGBuffer->GetRenderTarget2(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+	context.TransitionResource(mGBuffer->GetRenderTarget3(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+	context.TransitionResource(mGBuffer->GetDepthBuffer(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+	mGBuffer->Clear(context);
+	mGBuffer->SetAsRenderTargets(context);
+
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	ID3D12DescriptorHeap* heaps[] = {mTextureHeap.GetHeapPointer()};
-	context.GetCommandList()->SetDescriptorHeaps(1, heaps);
+	ID3D12DescriptorHeap* heaps[] = {mTextureHeap.GetHeapPointer(), mSamplerHeap.GetHeapPointer()};
+	context.GetCommandList()->SetDescriptorHeaps(2, heaps);
 
 	int entityCount = 0;
 	const uint32_t CONSTANT_BUFFER_ALIGNMENT = (sizeof(Transform) + 255U) & ~255U;
@@ -295,26 +320,21 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 										MATERIAL_BUFFER_ALIGNMENT;
 		mConstantUploadBuffer.Copy(&mConstants, sizeof(mConstants), constantBufferOffset);
 		mMaterialUploadBuffer.Copy(&matConsts, sizeof(matConsts), materialBufferOffset);
-		mLightingUploadBuffer.Copy(&mLightingConstants, sizeof(mLightingConstants), 0);
 
+		// Geometry pass bindings:
+		// b0 transform
+		// b1 material constants
+		// t0-t3 textures
+		// s0 Sampler
 		context.SetConstantBuffer(0, mConstantUploadBuffer.GetGpuVirtualAddress() +
 										 constantBufferOffset);
-		context.SetConstantBuffer(1, mLightingUploadBuffer.GetGpuVirtualAddress());
+		context.SetConstantBuffer(1, mMaterialUploadBuffer.GetGpuVirtualAddress() +
+										 materialBufferOffset);
 
-		D3D12_GPU_DESCRIPTOR_HANDLE materialHandle = mMaterialCBVStart.GetGpuHandle();
-		materialHandle.ptr += static_cast<UINT64>(
-			static_cast<UINT>(entityCount) * Graphics::gDevice->GetDescriptorHandleIncrementSize(
-												 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
-
-		context.GetCommandList()->SetGraphicsRootDescriptorTable(2, materialHandle);
-
-		context.GetCommandList()->SetGraphicsRootDescriptorTable(3, mLightBuffer->GetSRVGpu());
-
-		// Create material texture SRVs directly into consecutive descriptor slots
 		const uint32_t DESCRIPTOR_SIZE = Graphics::gDevice->GetDescriptorHandleIncrementSize(
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-		// Entties have  has 4 SRVs
+		// Using 4 srvs
 		const uint32_t MATERIAL_TEXTURE_SRV_OFFSET = static_cast<UINT>(entityCount) * 4;
 
 		D3D12_CPU_DESCRIPTOR_HANDLE destCPU = mMaterialTextureSRVStart.GetCpuHandle();
@@ -385,7 +405,7 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 			mMaterialTextureSRVStart.GetGpuHandle();
 		materialTextureSRVHandle.ptr +=
 			static_cast<UINT64>(MATERIAL_TEXTURE_SRV_OFFSET * DESCRIPTOR_SIZE);
-		context.GetCommandList()->SetGraphicsRootDescriptorTable(4, materialTextureSRVHandle);
+		context.GetCommandList()->SetGraphicsRootDescriptorTable(2, materialTextureSRVHandle);
 
 		D3D12_VERTEX_BUFFER_VIEW vbv = mesh->GetVertexBuffer().VertexBufferView(sizeof(Vertex));
 		context.SetVertexBuffer(vbv);
@@ -397,7 +417,40 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 		entityCount++;
 	}
 
+	// Transition for lighting pass next
+	context.TransitionResource(mGBuffer->GetRenderTarget0(),
+							   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	context.TransitionResource(mGBuffer->GetRenderTarget1(),
+							   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	context.TransitionResource(mGBuffer->GetRenderTarget2(),
+							   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	context.TransitionResource(mGBuffer->GetRenderTarget3(),
+							   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	context.TransitionResource(mGBuffer->GetDepthBuffer(), D3D12_RESOURCE_STATE_DEPTH_READ);
+
+#ifdef USE_PIX
+	PIXEndEvent(context.GetCommandList());
+#endif
+
+// LIGHTING PASS
+#ifdef USE_PIX
+	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(2), L"Lighting Pass (TODO)");
+#endif
+
+	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+	// LIGHTING PASS WIP - just render clear color for now
+	float clearColor[4] = {0.0F, 0.0F, 0.0F, 1.0F};
+	context.ClearColor(mViewportTexture->GetRTV(), clearColor);
 	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+#ifdef USE_PIX
+	PIXEndEvent(context.GetCommandList());
+#endif
+
+#ifdef USE_PIX
+	PIXEndEvent(context.GetCommandList()); // End Frame
+#endif
 }
 
 void Renderer::SetViewport(UINT width, UINT height)
@@ -632,6 +685,12 @@ void Renderer::ResizeViewport(uint32_t width, uint32_t height)
 	mViewportDepth->CreateView(Graphics::gDevice);
 
 	mViewportTexture->CreateSRV(mViewportSRV.GetCpuHandle());
+
+	if (mGBuffer)
+	{
+		mGBuffer->Resize(mViewportWidth, mViewportHeight);
+		mLogger->info("GBuffer resized to: {}x{}", mViewportWidth, mViewportHeight);
+	}
 
 	SetViewport(width, height);
 

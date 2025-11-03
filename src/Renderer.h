@@ -9,6 +9,7 @@
 #include "graphics/Core.h"
 #include "graphics/Texture.h"
 #include "graphics/DescriptorHeap.h"
+#include "graphics/GBuffer.h"
 #include "Mesh.h"
 #include "Lighting.h"
 #include "ICamera.h"
@@ -103,6 +104,7 @@ private:
 
 	DescriptorHeap mTextureHeap;
 	DescriptorHeap mSamplerHeap;
+	DescriptorHandle mSamplerHandle;
 
 	UploadBuffer mConstantUploadBuffer;
 	UploadBuffer mMaterialUploadBuffer;
@@ -130,6 +132,8 @@ private:
 	std::unique_ptr<ColorBuffer> mViewportTexture;
 	std::unique_ptr<DepthBuffer> mViewportDepth;
 	DescriptorHandle mViewportSRV;
+
+	std::unique_ptr<GBuffer> mGBuffer;
 
 	/// Probably misleading naming, the this viewport width and height
 	/// are for the actual texture generated for the viewport widget.
