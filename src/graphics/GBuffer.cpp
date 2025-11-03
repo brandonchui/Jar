@@ -1,5 +1,6 @@
 #include "GBuffer.h"
 #include "CommandContext.h"
+#include "Core.h"
 #include "d3d12.h"
 #include <spdlog/spdlog.h>
 
@@ -14,15 +15,21 @@ void GBuffer::Create(uint32_t width, uint32_t height)
 	mHeight = height;
 
 	mRenderTarget0.Create(L"GBuffer_Albedo_AO", mWidth, mHeight, 1, DXGI_FORMAT_R8G8B8A8_UNORM);
+	mRenderTarget0.CreateView(Graphics::gDevice);
 
 	mRenderTarget1.Create(L"GBuffer_Normal_Roughness", mWidth, mHeight, 1,
 						  DXGI_FORMAT_R16G16B16A16_FLOAT);
+	mRenderTarget1.CreateView(Graphics::gDevice);
 
 	mRenderTarget2.Create(L"GBuffer_Metallic_Flags", mWidth, mHeight, 1,
 						  DXGI_FORMAT_R8G8B8A8_UNORM);
+	mRenderTarget2.CreateView(Graphics::gDevice);
+
 	mRenderTarget3.Create(L"GBuffer_Emissive", mWidth, mHeight, 1, DXGI_FORMAT_R16G16B16A16_FLOAT);
+	mRenderTarget3.CreateView(Graphics::gDevice);
 
 	mDepth.Create(L"GBuffer_Depth", mWidth, mHeight, DXGI_FORMAT_D32_FLOAT);
+	mDepth.CreateView(Graphics::gDevice);
 
 	// Log?
 }
