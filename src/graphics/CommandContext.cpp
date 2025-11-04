@@ -3,6 +3,7 @@
 #include "slang/SlangCore.h"
 #include "Core.h"
 #include "ShaderCache.h"
+#include "CommandListManager.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include <d3dx12/d3dx12.h>
 #include <cassert>
@@ -75,6 +76,25 @@ namespace Graphics
 		// They will call queue.ExecuteCommandList(GetCommandList())
 	}
 
+	uint64_t CommandContext::Execute()
+	{
+		HRESULT hr = mCommandList->Close();
+		assert(SUCCEEDED(hr) && "Failed to close command list");
+
+		// NOTE Misleading name for GetGraphicsQueue(), will work for
+		// both graphics and compute pipelines.
+		auto& queue = gCommandListManager->GetGraphicsQueue();
+		return queue.ExecuteCommandList(mCommandList.Get());
+	}
+
+	void CommandContext::ExecuteAndWait()
+	{
+		uint64_t fenceValue = Execute();
+
+		auto& queue = gCommandListManager->GetGraphicsQueue();
+		queue.WaitForFence(fenceValue);
+	}
+
 	void CommandContext::TransitionResource(GpuResource& resource, D3D12_RESOURCE_STATES newState)
 	{
 		D3D12_RESOURCE_STATES oldState = resource.mUsageState;
@@ -87,6 +107,11 @@ namespace Graphics
 
 			resource.mUsageState = newState;
 		}
+	}
+
+	void CommandContext::CopyResource(GpuResource& dst, GpuResource& src)
+	{
+		mCommandList->CopyResource(dst.GetResource(), src.GetResource());
 	}
 
 	void CommandContext::SetRootDirectory()
@@ -280,6 +305,92 @@ namespace Graphics
 		{
 			sLogger->error("No root signature generated");
 		}
+	}
+
+	void CommandContext::SetComputeShader(const std::string& shaderName)
+	{
+		InitLogger();
+
+		uint64_t cacheKey = ShaderCache::ComputeKey(shaderName, DXGI_FORMAT_UNKNOWN,
+													DXGI_FORMAT_UNKNOWN);
+		if (Graphics::gShaderCache->Has(cacheKey))
+		{
+			auto* cached = Graphics::gShaderCache->Get(cacheKey);
+			mRootSignature = cached->rootSignature;
+			mPipelineState = cached->pipelineState;
+			return;
+		}
+
+		std::filesystem::path shaderPath = "shaders/" + shaderName + ".slang";
+
+		if (!std::filesystem::exists(shaderPath))
+		{
+			sLogger->error("Compute shader file not found: {}", shaderPath.string());
+			return;
+		}
+
+		sLogger->info("Compiling compute shader: {}", shaderName);
+
+		SlangHelper::CompiledShaderData shaderData =
+			SlangHelper::CompileShaderForPSO(shaderPath, Graphics::gDevice);
+
+		if (shaderData.rootSignature != nullptr)
+		{
+			mRootSignature.Attach(shaderData.rootSignature);
+
+			ID3D12PipelineState* pso =
+				SlangHelper::CreateComputePSOWithSlangShader(shaderData, Graphics::gDevice);
+
+			if (pso != nullptr)
+			{
+				mPipelineState.Attach(pso);
+				sLogger->info("Compute PSO created and attached");
+
+				Graphics::gShaderCache->Store(cacheKey, mRootSignature.Get(), mPipelineState.Get());
+			}
+			else
+			{
+				sLogger->error("Failed to create compute PSO");
+			}
+		}
+		else
+		{
+			sLogger->error("No root signature generated for compute shader");
+		}
+	}
+
+	void CommandContext::BindGraphicsPipeline()
+	{
+		if (mRootSignature)
+		{
+			mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
+		}
+
+		if (mPipelineState)
+		{
+			mCommandList->SetPipelineState(mPipelineState.Get());
+		}
+	}
+
+	void CommandContext::BindComputePipeline()
+	{
+		if (mRootSignature)
+		{
+			mCommandList->SetComputeRootSignature(mRootSignature.Get());
+		}
+
+		if (mPipelineState)
+		{
+			mCommandList->SetPipelineState(mPipelineState.Get());
+		}
+	}
+
+	void CommandContext::Dispatch(uint32_t threadGroupCountX, uint32_t threadGroupCountY,
+								  uint32_t threadGroupCountZ)
+	{
+		// Probably useless check here, but hopefully won't cause performance issues.
+		BindComputePipeline();
+		mCommandList->Dispatch(threadGroupCountX, threadGroupCountY, threadGroupCountZ);
 	}
 
 	void GraphicsContext::SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv)

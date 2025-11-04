@@ -36,6 +36,13 @@ namespace Graphics
 		/// NOTE trivial implemenation, need to add more here
 		void Flush(bool waitForCompletion = true);
 
+		/// Close, execute command list on GPU, and return fence value.
+		uint64_t Execute();
+
+		/// Close, execute command list on GPU, and wait for completion.
+		/// NOTE will block
+		void ExecuteAndWait();
+
 		/// Extracts the .slang file and creats root signature, PSO, vertex, pixel
 		/// bytecode.
 		void SetShader(const std::string& shaderName);
@@ -45,8 +52,41 @@ namespace Graphics
 						  uint32_t numRenderTargets,
 						  DXGI_FORMAT depthStencilFormat = DXGI_FORMAT_D32_FLOAT);
 
+		/// Binds graphics root signature and PSO to command list
+		void BindGraphicsPipeline();
+
+		/// Loads compute shader from .slang file in shaders directory.
+		void SetComputeShader(const std::string& shaderName);
+
+		/// Binds compute root signature and PSO to command list.
+		void BindComputePipeline();
+
+		/// Dispatch compute shader thread groups
+		void Dispatch(uint32_t threadGroupCountX, uint32_t threadGroupCountY = 1,
+					  uint32_t threadGroupCountZ = 1);
+
 		/// Transitions state for the resource given in the parameter.
 		void TransitionResource(GpuResource& resource, D3D12_RESOURCE_STATES newState);
+
+		/// Copy resource from source to destination
+		void CopyResource(GpuResource& dst, GpuResource& src);
+
+		/// Convenience wrapper for setting descriptor heaps
+		/// Usage: SetDescriptorHeaps(mTextureHeap) or SetDescriptorHeaps(mTextureHeap, mOtherHeap, ...)
+		template <typename... Heaps>
+		void SetDescriptorHeaps(Heaps&... heaps)
+		{
+			ID3D12DescriptorHeap* heapArray[] = {heaps.GetHeapPointer()...};
+			mCommandList->SetDescriptorHeaps(static_cast<UINT>(sizeof...(heaps)), heapArray);
+		}
+
+		/// Convenience wrapper for setting compute root descriptor table
+		/// Accepts DescriptorHandle (via implicit conversion) or raw D3D12_GPU_DESCRIPTOR_HANDLE
+		void SetComputeRootDescriptorTable(uint32_t rootParameterIndex,
+										   D3D12_GPU_DESCRIPTOR_HANDLE baseDescriptor)
+		{
+			mCommandList->SetComputeRootDescriptorTable(rootParameterIndex, baseDescriptor);
+		}
 
 		ID3D12GraphicsCommandList* GetCommandList() const { return mCommandList.Get(); }
 		ID3D12CommandAllocator* GetAllocator() const { return mAllocator.Get(); }
