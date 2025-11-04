@@ -1,6 +1,7 @@
 #include "SlangInputLayout.h"
 #include "SlangUtilities.h"
 #include <algorithm>
+#include <string>
 
 namespace SlangHelper
 {
@@ -8,10 +9,11 @@ namespace SlangHelper
 #ifdef HAS_SLANG
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC>
-	ExtractInputLayoutFromReflection(slang::EntryPointReflection* entryPoint)
+	ExtractInputLayoutFromReflection(slang::EntryPointReflection* entryPoint, std::vector<std::string>& outSemanticNames)
 	{
 		GetLogger()->info("Calling ExtractInputLayoutFromReflection():");
 		std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements;
+		outSemanticNames.clear();
 
 		if (!entryPoint || entryPoint->getStage() != SLANG_STAGE_VERTEX)
 		{
@@ -72,6 +74,8 @@ namespace SlangHelper
 				};
 
 				std::vector<FieldInfo> fields;
+				fields.reserve(fieldCount);
+				outSemanticNames.reserve(outSemanticNames.size() + fieldCount);
 
 				for (uint32_t fieldIdx = 0; fieldIdx < fieldCount; fieldIdx++)
 				{
@@ -165,8 +169,10 @@ namespace SlangHelper
 
 					if (format != DXGI_FORMAT_UNKNOWN)
 					{
+						outSemanticNames.push_back(std::string(semanticName));
+
 						D3D12_INPUT_ELEMENT_DESC element = {};
-						element.SemanticName = semanticName;
+						element.SemanticName = outSemanticNames.back().c_str();
 						element.SemanticIndex = static_cast<UINT>(semanticIndex);
 						element.Format = format;
 						element.InputSlot = 0;
@@ -220,8 +226,10 @@ namespace SlangHelper
 
 				if (format != DXGI_FORMAT_UNKNOWN)
 				{
+					outSemanticNames.push_back(std::string(semanticName));
+
 					D3D12_INPUT_ELEMENT_DESC element = {};
-					element.SemanticName = semanticName;
+					element.SemanticName = outSemanticNames.back().c_str();
 					element.SemanticIndex = static_cast<UINT>(semanticIndex);
 					element.Format = format;
 					element.InputSlot = 0;

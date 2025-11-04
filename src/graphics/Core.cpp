@@ -4,6 +4,7 @@
 #include "DescriptorHeap.h"
 #include "CommandListManager.h"
 #include "CommandContext.h"
+#include "ShaderCache.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include <cstdint>
 #include <dxgi1_6.h>
@@ -12,6 +13,7 @@
 #include <string>
 #include <windows.h>
 #include <D3D12MemAlloc.h>
+#include <unordered_set>
 
 #if _DEBUG
 #include <dxgidebug.h>
@@ -31,6 +33,9 @@ namespace Graphics
 	// Global command list management
 	CommandListManager* gCommandListManager = nullptr;
 	GraphicsContext* gGraphicsContext = nullptr;
+
+	// Global shader cache
+	ShaderCache* gShaderCache = nullptr;
 
 	std::shared_ptr<spdlog::logger> gLogger = nullptr;
 
@@ -76,6 +81,8 @@ namespace Graphics
 				// Slow but nessessary
 				debugInterface->SetEnableGPUBasedValidation(TRUE);
 				debugInterface->SetEnableSynchronizedCommandQueueValidation(TRUE);
+				debugInterface->SetEnableAutoName(TRUE);
+				debugInterface->SetForceLegacyBarrierValidation(FALSE);
 
 				gLogger->info("Debug layer enabled");
 			}
@@ -92,7 +99,7 @@ namespace Graphics
 				dxgiFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
 
 				dxgiInfoQueue->SetBreakOnSeverity(DXGI_DEBUG_ALL,
-												  DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, FALSE);
+												  DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, TRUE);
 				dxgiInfoQueue->SetBreakOnSeverity(
 					DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, TRUE);
 
@@ -247,6 +254,19 @@ namespace Graphics
 		// Set the device name for debugging
 #if _DEBUG
 		pDevice->SetName(L"Jar_D3D12Device");
+
+		Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
+		{
+			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			pDredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			gLogger->info("DRED enabled");
+		}
+		else
+		{
+			gLogger->warn("DRED not available");
+		}
 #endif
 
 		LogDeviceCapabilities(pDevice.Get());
@@ -309,14 +329,25 @@ namespace Graphics
 		// Try to get InfoQueue1 interface for callback support
 		if (SUCCEEDED(gDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue1))))
 		{
+			static std::unordered_set<D3D12_MESSAGE_ID> seenMessages;
+
 			// Better to have our errors presented to us by force aka messagebox
 			auto messageCallback = [](D3D12_MESSAGE_CATEGORY category,
 									  D3D12_MESSAGE_SEVERITY severity, D3D12_MESSAGE_ID id,
 									  LPCSTR pDescription, void* pContext) -> void {
-				// Only care about errors and corrupts
 				if (severity == D3D12_MESSAGE_SEVERITY_ERROR ||
-					severity == D3D12_MESSAGE_SEVERITY_CORRUPTION)
+					severity == D3D12_MESSAGE_SEVERITY_CORRUPTION ||
+					severity == D3D12_MESSAGE_SEVERITY_WARNING)
 				{
+					if (severity == D3D12_MESSAGE_SEVERITY_WARNING)
+					{
+						if (seenMessages.find(id) != seenMessages.end())
+						{
+							return;
+						}
+						seenMessages.insert(id);
+					}
+
 					std::string title;
 					switch (severity)
 					{
@@ -325,6 +356,9 @@ namespace Graphics
 						break;
 					case D3D12_MESSAGE_SEVERITY_ERROR:
 						title = "D3D12 ERROR";
+						break;
+					case D3D12_MESSAGE_SEVERITY_WARNING:
+						title = "D3D12 WARNING";
 						break;
 					default:
 						title = "D3D12 MESSAGE";
@@ -338,15 +372,21 @@ namespace Graphics
 									static_cast<int>(category), static_cast<int>(id),
 									pDescription ? pDescription : "No description available");
 
-					UINT mbType = MB_OK | MB_ICONERROR | MB_TOPMOST;
-					if (severity == D3D12_MESSAGE_SEVERITY_CORRUPTION)
+					if (severity == D3D12_MESSAGE_SEVERITY_WARNING)
 					{
-						mbType |= MB_ICONSTOP;
+						gLogger->warn("{}: {}", title, message);
 					}
+					else
+					{
+						UINT mbType = MB_OK | MB_ICONERROR | MB_TOPMOST;
+						if (severity == D3D12_MESSAGE_SEVERITY_CORRUPTION)
+						{
+							mbType |= MB_ICONSTOP;
+						}
 
-					MessageBoxA(nullptr, message.c_str(), title.c_str(), mbType);
-
-					gLogger->error("{} - {}", title, message);
+						MessageBoxA(nullptr, message.c_str(), title.c_str(), mbType);
+						gLogger->error("{}: {}", title, message);
+					}
 				}
 			};
 
@@ -356,20 +396,23 @@ namespace Graphics
 
 			if (SUCCEEDED(hr))
 			{
-				gLogger->info("MessageBox callback registered for errors and corruption");
+				gLogger->info(
+					"MessageBox callback registered for errors, corruption, and warnings");
 			}
 			else
 			{
 				gLogger->error("Failed to register message callback: {}", HRESULTToString(hr));
 			}
 
-			// Filters
-			D3D12_MESSAGE_SEVERITY severities[] = {D3D12_MESSAGE_SEVERITY_INFO};
+			pInfoQueue1->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+			pInfoQueue1->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+
+			// Filters - TEMPORARILY DISABLED TO SEE PSO ERRORS
+			// D3D12_MESSAGE_SEVERITY severities[] = {D3D12_MESSAGE_SEVERITY_INFO};
 
 			// NOTE see https://learn.microsoft.com/en-us/windows/win32/api/d3d12sdklayers/ne-d3d12sdklayers-d3d12_message_id
 			D3D12_MESSAGE_ID denyIds[] = {
 				D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
-				D3D12_MESSAGE_ID_CREATEGRAPHICSPIPELINESTATE_PS_OUTPUT_RT_OUTPUT_MISMATCH,
 				D3D12_MESSAGE_ID_COMMAND_LIST_DESCRIPTOR_TABLE_NOT_SET,
 				D3D12_MESSAGE_ID_RESOURCE_BARRIER_DUPLICATE_SUBRESOURCE_TRANSITIONS,
 				D3D12_MESSAGE_ID_RESOLVE_QUERY_INVALID_QUERY_STATE,
@@ -377,8 +420,8 @@ namespace Graphics
 			};
 
 			D3D12_INFO_QUEUE_FILTER newFilter = {};
-			newFilter.DenyList.NumSeverities = _countof(severities);
-			newFilter.DenyList.pSeverityList = severities;
+			// newFilter.DenyList.NumSeverities = _countof(severities);
+			// newFilter.DenyList.pSeverityList = severities;
 			newFilter.DenyList.NumIDs = _countof(denyIds);
 			newFilter.DenyList.pIDList = denyIds;
 
@@ -394,12 +437,12 @@ namespace Graphics
 			pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
 			pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
 
-			D3D12_MESSAGE_SEVERITY severities[] = {D3D12_MESSAGE_SEVERITY_INFO};
+			// TEMPORARILY DISABLED TO SEE PSO ERRORS
+			// D3D12_MESSAGE_SEVERITY severities[] = {D3D12_MESSAGE_SEVERITY_INFO};
 
 			// Suppress individual messages by their ID
 			D3D12_MESSAGE_ID denyIds[] = {
 				D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
-				D3D12_MESSAGE_ID_CREATEGRAPHICSPIPELINESTATE_PS_OUTPUT_RT_OUTPUT_MISMATCH,
 				D3D12_MESSAGE_ID_COMMAND_LIST_DESCRIPTOR_TABLE_NOT_SET,
 				D3D12_MESSAGE_ID_RESOURCE_BARRIER_DUPLICATE_SUBRESOURCE_TRANSITIONS,
 				D3D12_MESSAGE_ID_RESOLVE_QUERY_INVALID_QUERY_STATE,
@@ -407,8 +450,8 @@ namespace Graphics
 			};
 
 			D3D12_INFO_QUEUE_FILTER newFilter = {};
-			newFilter.DenyList.NumSeverities = _countof(severities);
-			newFilter.DenyList.pSeverityList = severities;
+			// newFilter.DenyList.NumSeverities = _countof(severities);
+			// newFilter.DenyList.pSeverityList = severities;
 			newFilter.DenyList.NumIDs = _countof(denyIds);
 			newFilter.DenyList.pIDList = denyIds;
 
@@ -444,6 +487,8 @@ void Graphics::Init()
 	InitializeDescriptorAllocators();
 	InitializeCommandSystem();
 
+	gShaderCache = new ShaderCache();
+
 	SetupDebugInfoQueue();
 
 	gLogger->info("Graphics system initialization complete");
@@ -470,6 +515,12 @@ void Graphics::Shutdown()
 		gCommandListManager->Shutdown();
 		delete gCommandListManager;
 		gCommandListManager = nullptr;
+	}
+
+	if (gShaderCache)
+	{
+		delete gShaderCache;
+		gShaderCache = nullptr;
 	}
 
 	for (auto& i : gDescriptorAllocator)

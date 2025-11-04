@@ -102,103 +102,29 @@ if(USE_SLANG)
             get_filename_component(SHADER_NAME ${SHADER_FILE} NAME_WE)
         endif()
 
-        set(DXIL_FILE "${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.dxil")
-        set(ERROR_FILE "${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.error")
-
-        set(COMPILE_SCRIPT "${CMAKE_BINARY_DIR}/compile_shader_${SHADER_NAME}.cmake")
-        file(WRITE ${COMPILE_SCRIPT} "
-# Shader Compilation Script for ${SHADER_NAME}
-set(SLANGC \"${SLANG_BIN_DIR}/slangc\")
-set(SHADER_PATH \"${SHADER_PATH}\")
-set(DXIL_FILE \"${DXIL_FILE}\")
-set(ERROR_FILE \"${ERROR_FILE}\")
-set(SHADER_NAME \"${SHADER_NAME}\")
-
-# Clear any previous error file
-file(REMOVE \"\${ERROR_FILE}\")
-
-# Run shader compilation
-execute_process(
-    COMMAND \"\${SLANGC}\"
-        -profile sm_6_6
-        -target dxil
-        -o \"\${DXIL_FILE}\"
-        -fvk-use-entrypoint-name
-        \"\${SHADER_PATH}\"
-    RESULT_VARIABLE COMPILE_RESULT
-    OUTPUT_VARIABLE COMPILE_OUTPUT
-    ERROR_VARIABLE COMPILE_ERROR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_STRIP_TRAILING_WHITESPACE
-)
-
-if(NOT COMPILE_RESULT EQUAL 0)
-    # Write error to file for later reference
-    file(WRITE \"\${ERROR_FILE}\" \"\${COMPILE_ERROR}\")
-
-    # Pretty print the error
-    message(\"════════════════════════════════════════════════════════════════════════\")
-    message(\"  SHADER COMPILATION FAILED: \${SHADER_NAME}\")
-    message(\"════════════════════════════════════════════════════════════════════════\")
-    message(\"  Source: \${SHADER_PATH}\")
-    message(\"────────────────────────────────────────────────────────────────────────\")
-
-    # Parse and format error messages
-    string(REPLACE \"\\n\" \";\" ERROR_LINES \"\${COMPILE_ERROR}\")
-    foreach(LINE \${ERROR_LINES})
-        if(LINE MATCHES \"error\")
-            message(\"  ERROR \${LINE}\")
-        elseif(LINE MATCHES \"warning\")
-            message(\"  WARNING \${LINE}\")
-        elseif(LINE MATCHES \"note\")
-            message(\"  OK \${LINE}\")
-        else()
-            message(\"     \${LINE}\")
-        endif()
-    endforeach()
-
-    message(\"════════════════════════════════════════════════════════════════════════\")
-    message(FATAL_ERROR \"Shader compilation failed. See errors above.\")
-else()
-    # Success message
-    message(\"  Compiled shader: \${SHADER_NAME} → DXIL\")
-
-    # If there are warnings, show them
-    if(NOT \"\${COMPILE_OUTPUT}\" STREQUAL \"\" OR NOT \"\${COMPILE_ERROR}\" STREQUAL \"\")
-        set(ALL_OUTPUT \"\${COMPILE_OUTPUT}\${COMPILE_ERROR}\")
-        if(ALL_OUTPUT MATCHES \"warning\")
-            message(\"   Warnings detected in \${SHADER_NAME}:\")
-            string(REPLACE \"\\n\" \";\" OUTPUT_LINES \"\${ALL_OUTPUT}\")
-            foreach(LINE \${OUTPUT_LINES})
-                if(LINE MATCHES \"warning\")
-                    message(\"     \${LINE}\")
-                endif()
-            endforeach()
-        endif()
-    endif()
-endif()
-")
+        set(SLANG_DEST "${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.slang")
 
         add_custom_command(
-            OUTPUT ${DXIL_FILE}
+            OUTPUT ${SLANG_DEST}
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/shaders"
-            COMMAND ${CMAKE_COMMAND} -P ${COMPILE_SCRIPT}
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SHADER_PATH} ${SLANG_DEST}
             DEPENDS ${SHADER_PATH}
-            COMMENT " Compiling shader: ${SHADER_NAME}.slang"
+            COMMENT "Copying shader source: ${SHADER_NAME}.slang"
             VERBATIM
         )
 
-        set_source_files_properties(${DXIL_FILE} PROPERTIES GENERATED TRUE)
-
-        target_sources(${TARGET} PRIVATE ${DXIL_FILE})
+        set_source_files_properties(${SLANG_DEST} PROPERTIES GENERATED TRUE)
+        target_sources(${TARGET} PRIVATE ${SLANG_DEST})
 
         add_custom_command(TARGET ${TARGET} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${TARGET}>/shaders"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${DXIL_FILE}
-            "$<TARGET_FILE_DIR:${TARGET}>/shaders/${SHADER_NAME}.dxil"
-            COMMENT "Installing shader: ${SHADER_NAME}.dxil"
+            ${SLANG_DEST}
+            "$<TARGET_FILE_DIR:${TARGET}>/shaders/${SHADER_NAME}.slang"
+            COMMENT "Installing shader: ${SHADER_NAME}.slang"
         )
+
+        message(STATUS "Added Slang shader: ${SHADER_NAME}.slang")
     endfunction()
 
     function(add_slang_shader_hlsl TARGET SHADER_FILE)

@@ -15,13 +15,23 @@ void DepthBuffer::Create(const wchar_t* name, uint32_t width, uint32_t height, D
 	mHeight = height;
 	mFormat = format;
 
+	DXGI_FORMAT resourceFormat = format;
+	if (format == DXGI_FORMAT_D32_FLOAT)
+	{
+		resourceFormat = DXGI_FORMAT_R32_TYPELESS;
+	}
+	else if (format == DXGI_FORMAT_D24_UNORM_S8_UINT)
+	{
+		resourceFormat = DXGI_FORMAT_R24G8_TYPELESS;
+	}
+
 	D3D12_RESOURCE_DESC desc = {};
 	desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 	desc.Width = width;
 	desc.Height = height;
 	desc.DepthOrArraySize = 1;
 	desc.MipLevels = 1;
-	desc.Format = format;
+	desc.Format = resourceFormat;
 	desc.SampleDesc.Count = 1;
 	desc.SampleDesc.Quality = 0;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
@@ -63,6 +73,34 @@ void DepthBuffer::CreateView(ID3D12Device* pDevice)
 	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
 
 	pDevice->CreateDepthStencilView(mResource.Get(), &dsvDesc, dsvHandle);
+}
+
+void DepthBuffer::CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE srvHandle)
+{
+	assert(mResource != nullptr);
+
+	DXGI_FORMAT srvFormat = DXGI_FORMAT_UNKNOWN;
+	if (mFormat == DXGI_FORMAT_D32_FLOAT)
+	{
+		srvFormat = DXGI_FORMAT_R32_FLOAT;
+	}
+	else if (mFormat == DXGI_FORMAT_D24_UNORM_S8_UINT)
+	{
+		srvFormat = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+	}
+
+	assert(srvFormat != DXGI_FORMAT_UNKNOWN && "Unsupported depth format for SRV");
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = srvFormat;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Texture2D.MostDetailedMip = 0;
+	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.PlaneSlice = 0;
+	srvDesc.Texture2D.ResourceMinLODClamp = 0.0F;
+
+	Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, srvHandle);
 }
 
 void DepthBuffer::Clear(Graphics::GraphicsContext& context, float depth)

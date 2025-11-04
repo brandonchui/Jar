@@ -9,6 +9,7 @@
 #include "graphics/Core.h"
 #include "graphics/Texture.h"
 #include "graphics/DescriptorHeap.h"
+#include "graphics/GBuffer.h"
 #include "Mesh.h"
 #include "Lighting.h"
 #include "ICamera.h"
@@ -26,7 +27,7 @@ class UISystem;
 
 /*
 TODO
-[ ] Deferred
+[x] Deferred
 [ ] Clustered
 [x] Create Scene
 		- only supports a single mesh and texture for rendering
@@ -103,6 +104,7 @@ private:
 
 	DescriptorHeap mTextureHeap;
 	DescriptorHeap mSamplerHeap;
+	DescriptorHandle mSamplerHandle;
 
 	UploadBuffer mConstantUploadBuffer;
 	UploadBuffer mMaterialUploadBuffer;
@@ -115,6 +117,9 @@ private:
 
 	// 4 SRVs per entity - albedo, normal, metallic, roughness
 	DescriptorHandle mMaterialTextureSRVStart;
+
+	// 4 SRVs for GBuffer textures - albedo/AO, normal/rough, metallic/flags, emissive
+	DescriptorHandle mGBufferSRVStart;
 
 	std::vector<SpotLight> mSpotLights;
 	std::unique_ptr<Graphics::StructuredBuffer> mLightBuffer;
@@ -130,6 +135,8 @@ private:
 	std::unique_ptr<ColorBuffer> mViewportTexture;
 	std::unique_ptr<DepthBuffer> mViewportDepth;
 	DescriptorHandle mViewportSRV;
+
+	std::unique_ptr<GBuffer> mGBuffer;
 
 	/// Probably misleading naming, the this viewport width and height
 	/// are for the actual texture generated for the viewport widget.

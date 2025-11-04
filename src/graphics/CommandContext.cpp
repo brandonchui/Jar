@@ -2,6 +2,7 @@
 #include "GpuResource.h"
 #include "slang/SlangCore.h"
 #include "Core.h"
+#include "ShaderCache.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include <d3dx12/d3dx12.h>
 #include <cassert>
@@ -99,6 +100,20 @@ namespace Graphics
 		// We are grabbing the shaders,pso, root sigs entirely from the
 		// Slang reflection API.
 		InitLogger();
+
+		// Check cache first before we go ahead and compile since the app
+		// will completely slow down.
+		uint64_t cacheKey = ShaderCache::ComputeKey(shaderName, DXGI_FORMAT_R8G8B8A8_UNORM,
+													DXGI_FORMAT_D32_FLOAT);
+		if (Graphics::gShaderCache->Has(cacheKey))
+		{
+			auto* cached = Graphics::gShaderCache->Get(cacheKey);
+			mRootSignature = cached->rootSignature;
+			mPipelineState = cached->pipelineState;
+			// sLogger->info("Using cached shader: {}", shaderName);
+			return;
+		}
+
 		std::filesystem::path shaderPath = "shaders/" + shaderName + ".slang";
 
 		if (!std::filesystem::exists(shaderPath))
@@ -108,7 +123,7 @@ namespace Graphics
 			return;
 		}
 
-		sLogger->info("Setting shader: {}", shaderName);
+		sLogger->info("Compiling shader: {}", shaderName);
 
 		if (!Graphics::gDevice)
 		{
@@ -166,10 +181,99 @@ namespace Graphics
 			{
 				mPipelineState.Attach(pso);
 				sLogger->info("PSO created and attached");
+
+				Graphics::gShaderCache->Store(cacheKey, mRootSignature.Get(), mPipelineState.Get());
 			}
 			else
 			{
 				sLogger->error("Failed to create PSO");
+			}
+		}
+		else
+		{
+			sLogger->error("No root signature generated");
+		}
+	}
+
+	void CommandContext::SetShaderMRT(const std::string& shaderName, const DXGI_FORMAT* rtFormats,
+									  uint32_t numRenderTargets, DXGI_FORMAT depthStencilFormat)
+	{
+		InitLogger();
+
+		uint64_t cacheKey = ShaderCache::ComputeMRTKey(shaderName, rtFormats, numRenderTargets,
+													   depthStencilFormat);
+		if (Graphics::gShaderCache->Has(cacheKey))
+		{
+			auto* cached = Graphics::gShaderCache->Get(cacheKey);
+			mRootSignature = cached->rootSignature;
+			mPipelineState = cached->pipelineState;
+			// sLogger->info("Using cached MRT shader: {}", shaderName);
+			return;
+		}
+
+		std::filesystem::path shaderPath = "shaders/" + shaderName + ".slang";
+
+		if (!std::filesystem::exists(shaderPath))
+		{
+			sLogger->error("Shader file not found: {}", shaderPath.string());
+			assert(false && "Shader file not found");
+			return;
+		}
+
+		sLogger->info("Compiling MRT shader: {}", shaderName);
+
+		if (!Graphics::gDevice)
+		{
+			sLogger->error("Graphics::gDevice null");
+			return;
+		}
+
+		sLogger->debug("Calling CompileShaderForPSO...");
+		SlangHelper::CompiledShaderData shaderData =
+			SlangHelper::CompileShaderForPSO(shaderPath, Graphics::gDevice);
+
+		sLogger->debug("Shader compilation results:");
+		sLogger->debug("\tVertex bytecode size: {} bytes", shaderData.vertexBytecode.size());
+		sLogger->debug("\tFragment bytecode size: {} bytes", shaderData.fragBytecode.size());
+		sLogger->debug("\tRoot signature: {}", shaderData.rootSignature ? "YES" : "NO");
+
+		if (!shaderData.vertexBytecode.empty())
+		{
+			sLogger->debug("\tVertex bytecode is valid: {} bytes",
+						   shaderData.vertexBytecode.size());
+		}
+		else
+		{
+			sLogger->error("\tNo vertex bytecode");
+		}
+
+		if (!shaderData.fragBytecode.empty())
+		{
+			sLogger->debug("\tPixel bytecode is valid: {} bytes", shaderData.fragBytecode.size());
+		}
+		else
+		{
+			sLogger->error("\tNo pixel bytecode");
+		}
+
+		if (shaderData.rootSignature != nullptr)
+		{
+			mRootSignature.Attach(shaderData.rootSignature);
+
+			sLogger->debug("Creating MRT PSO with {} render targets...", numRenderTargets);
+			ID3D12PipelineState* pso = SlangHelper::CreatePSOWithSlangShaderMRT(
+				shaderData, Graphics::gDevice, rtFormats, numRenderTargets, depthStencilFormat);
+
+			if (pso != nullptr)
+			{
+				mPipelineState.Attach(pso);
+				sLogger->info("MRT PSO created and attached");
+
+				Graphics::gShaderCache->Store(cacheKey, mRootSignature.Get(), mPipelineState.Get());
+			}
+			else
+			{
+				sLogger->error("Failed to create MRT PSO");
 			}
 		}
 		else
