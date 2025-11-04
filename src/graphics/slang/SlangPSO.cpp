@@ -345,6 +345,41 @@ namespace SlangHelper
 		return pso;
 	}
 
+	ID3D12PipelineState*
+	CreateComputePSOWithSlangShader(const CompiledShaderData& shaderData, ID3D12Device* device)
+	{
+		GetLogger()->info("Creating compute PSO from Slang shader");
+
+		if (!device || !shaderData.rootSignature)
+		{
+			GetLogger()->error("Invalid device or root signature");
+			return nullptr;
+		}
+
+		if (shaderData.computeBytecode.empty())
+		{
+			GetLogger()->error("No compute shader bytecode found");
+			return nullptr;
+		}
+
+		D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.pRootSignature = shaderData.rootSignature;
+		psoDesc.CS.pShaderBytecode = shaderData.computeBytecode.data();
+		psoDesc.CS.BytecodeLength = shaderData.computeBytecode.size();
+
+		ID3D12PipelineState* pso = nullptr;
+		HRESULT hr = device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&pso));
+
+		if (FAILED(hr))
+		{
+			GetLogger()->error("Failed to create compute PSO: 0x{:X}", hr);
+			return nullptr;
+		}
+
+		GetLogger()->info("Compute PSO created successfully");
+		return pso;
+	}
+
 #endif // HAS_SLANG
 
 } // namespace SlangHelper

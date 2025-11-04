@@ -94,6 +94,10 @@ public:
 	/// displays it 1:1 in the viewport widget wherever it's docked.
 	void ResizeViewport(uint32_t width, uint32_t height);
 
+	/// Post process
+	float GetBlurIntensity() const { return mBlurIntensity; }
+	void SetBlurIntensity(float intensity) { mBlurIntensity = intensity; }
+
 private:
 	void InitLogger();
 
@@ -137,6 +141,18 @@ private:
 	DescriptorHandle mViewportSRV;
 
 	std::unique_ptr<GBuffer> mGBuffer;
+
+	/// Blur post process intermediate texture since we can not modify
+	/// in place of the textures.
+	std::unique_ptr<ColorBuffer> mBlurTempTexture;
+
+	DescriptorHandle mViewportTextureSRV;
+	DescriptorHandle mViewportTextureUAV;
+
+	DescriptorHandle mBlurTempSRV;
+	DescriptorHandle mBlurTempUAV;
+
+	float mBlurIntensity = 0.0F;
 
 	/// Probably misleading naming, the this viewport width and height
 	/// are for the actual texture generated for the viewport widget.

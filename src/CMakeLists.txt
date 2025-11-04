@@ -45,6 +45,8 @@ add_executable(Jar
     graphics/Texture.h
     graphics/StructuredBuffer.cpp
     graphics/StructuredBuffer.h
+    graphics/ReadbackBuffer.cpp
+    graphics/ReadbackBuffer.h
     graphics/slang/SlangCore.h
     graphics/slang/SlangTypes.h
     graphics/slang/SlangUtilities.h

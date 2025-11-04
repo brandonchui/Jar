@@ -30,7 +30,7 @@ namespace Graphics
 	}
 
 	void StructuredBuffer::Create(const std::wstring& name, uint32_t numElements,
-								  uint32_t elementSize, const void* initialData)
+								  uint32_t elementSize, const void* initialData, bool allowUAV)
 	{
 		InitLogger();
 		mElementCount = numElements;
@@ -48,6 +48,8 @@ namespace Graphics
 		desc.SampleDesc.Quality = 0;
 		desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+		if (allowUAV)
+			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 		D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 
@@ -145,6 +147,35 @@ namespace Graphics
 	{
 		mSrvCpuHandle = cpuHandle;
 		mSrvGpuHandle = gpuHandle;
+	}
+
+	void StructuredBuffer::CreateUAV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle)
+	{
+		if (!mResource)
+		{
+			sLogger->error("Can't create UAV because buffer not created");
+			return;
+		}
+
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+		uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+		uavDesc.Buffer.FirstElement = 0;
+		uavDesc.Buffer.NumElements = mElementCount;
+		uavDesc.Buffer.StructureByteStride = mElementSize;
+		uavDesc.Buffer.CounterOffsetInBytes = 0;
+		uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+		gDevice->CreateUnorderedAccessView(mResource.Get(), nullptr, &uavDesc, cpuHandle);
+
+		sLogger->debug("Created UAV for {} elements of {} bytes", mElementCount, mElementSize);
+	}
+
+	void StructuredBuffer::SetUAVHandles(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+										 D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle)
+	{
+		mUavCpuHandle = cpuHandle;
+		mUavGpuHandle = gpuHandle;
 	}
 
 } // namespace Graphics

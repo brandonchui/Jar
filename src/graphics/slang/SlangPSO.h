@@ -25,6 +25,10 @@ namespace SlangHelper
 								const DXGI_FORMAT* renderTargetFormats, uint32_t numRenderTargets,
 								DXGI_FORMAT depthStencilFormat = DXGI_FORMAT_D32_FLOAT);
 
+	/// Creates compute PSO from CompiledShaderData
+	ID3D12PipelineState*
+	CreateComputePSOWithSlangShader(const CompiledShaderData& shaderData, ID3D12Device* device);
+
 #endif // HAS_SLANG
 
 } // namespace SlangHelper

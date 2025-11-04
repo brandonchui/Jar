@@ -3,6 +3,7 @@
 #include "ui/UISystem.h"
 #include "d3d12.h"
 #include "graphics/CommandContext.h"
+#include "graphics/CommandListManager.h"
 #include "graphics/ColorBuffer.h"
 #include "graphics/UploadBuffer.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
@@ -202,10 +203,15 @@ void Renderer::Initialize(UISystem* uiSystem)
 	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
 	Graphics::gDevice->CreateSampler(&samplerDesc, mSamplerHandle.GetCpuHandle());
 
-	// Offscreen viewport render target
+	// Offscreen viewport render target, allow UAV
 	mViewportTexture = std::make_unique<ColorBuffer>();
 	mViewportTexture->Create(L"ViewportTexture", mViewportWidth, mViewportHeight, 1,
-							 DXGI_FORMAT_R8G8B8A8_UNORM);
+							 DXGI_FORMAT_R8G8B8A8_UNORM, true);
+
+	// Post process blur after, allow UAV
+	mBlurTempTexture = std::make_unique<ColorBuffer>();
+	mBlurTempTexture->Create(L"BlurTempTexture", mViewportWidth, mViewportHeight, 1,
+							 DXGI_FORMAT_R8G8B8A8_UNORM, true);
 
 	// Depth buffer for viewport
 	mViewportDepth = std::make_unique<DepthBuffer>();
@@ -241,6 +247,19 @@ void Renderer::Initialize(UISystem* uiSystem)
 	// NOTE: Allocate from ImGui's heap so it can reference it when rendering
 	mViewportSRV = uiSystem->AllocateDescriptor(1);
 	mViewportTexture->CreateSRV(mViewportSRV.GetCpuHandle());
+
+	// Post process initialization SRV,UAV
+	mViewportTextureSRV = mTextureHeap.Alloc(1);
+	mViewportTextureUAV = mTextureHeap.Alloc(1);
+
+	mBlurTempSRV = mTextureHeap.Alloc(1);
+	mBlurTempUAV = mTextureHeap.Alloc(1);
+
+	mViewportTexture->CreateSRV(mViewportTextureSRV.GetCpuHandle());
+	mViewportTexture->CreateUAV(mViewportTextureUAV.GetCpuHandle());
+
+	mBlurTempTexture->CreateSRV(mBlurTempSRV.GetCpuHandle());
+	mBlurTempTexture->CreateUAV(mBlurTempUAV.GetCpuHandle());
 
 	mLogger->info("Viewport offscreen texture created: {}x{}", mViewportWidth, mViewportHeight);
 }
@@ -282,8 +301,6 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 								// RT3: Emissive
 								DXGI_FORMAT_R16G16B16A16_FLOAT};
 
-	context.SetShaderMRT("GeometryPass", rtFormats, 4, DXGI_FORMAT_D32_FLOAT);
-
 	context.Begin();
 
 #ifdef USE_PIX
@@ -296,6 +313,10 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(1), L"Geometry Pass");
 #endif
 
+	context.SetShaderMRT("GeometryPass", rtFormats, 4, DXGI_FORMAT_D32_FLOAT);
+
+	context.BindGraphicsPipeline();
+
 	context.TransitionResource(mGBuffer->GetRenderTarget0(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 	context.TransitionResource(mGBuffer->GetRenderTarget1(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 	context.TransitionResource(mGBuffer->GetRenderTarget2(), D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -307,8 +328,7 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	ID3D12DescriptorHeap* heaps[] = {mTextureHeap.GetHeapPointer(), mSamplerHeap.GetHeapPointer()};
-	context.GetCommandList()->SetDescriptorHeaps(2, heaps);
+	context.SetDescriptorHeaps(mTextureHeap, mSamplerHeap);
 
 	int entityCount = 0;
 	const uint32_t CONSTANT_BUFFER_ALIGNMENT = (sizeof(Transform) + 255U) & ~255U;
@@ -499,7 +519,72 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.DrawInstanced(3, 1);
 
+	// POST PROCESS
+#ifdef USE_PIX
+	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(200), "Post-Process");
+#endif
+
+	///// Blur
+#ifdef USE_PIX
+	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(210), "Gaussian Blur");
+#endif
+
+	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	context.TransitionResource(*mBlurTempTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	// Horiziontal
+#ifdef USE_PIX
+	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(211), "Blur Horizontal");
+#endif
+
+	context.SetComputeShader("BlurHorizontal");
+	context.SetDescriptorHeaps(mTextureHeap);
+	context.BindComputePipeline();
+
+	context.SetComputeConstants(0, 1, &mBlurIntensity);
+
+	context.SetComputeRootDescriptorTable(1, mViewportTextureSRV);
+	context.SetComputeRootDescriptorTable(2, mBlurTempUAV);
+
+	uint32_t groupsX = (mViewportWidth + 7) / 8;
+	uint32_t groupsY = (mViewportHeight + 7) / 8;
+	context.Dispatch(groupsX, groupsY, 1);
+
+#ifdef USE_PIX
+	PIXEndEvent(context.GetCommandList());
+#endif
+
+	context.TransitionResource(*mBlurTempTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	// Vertical
+#ifdef USE_PIX
+	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(212), "Blur Vertical");
+#endif
+
+	context.SetComputeShader("BlurVertical");
+	context.BindComputePipeline();
+
+	context.SetComputeConstants(0, 1, &mBlurIntensity);
+
+	context.SetComputeRootDescriptorTable(1, mBlurTempSRV);
+	context.SetComputeRootDescriptorTable(2, mViewportTextureUAV);
+
+	context.Dispatch(groupsX, groupsY, 1);
+
+#ifdef USE_PIX
+	PIXEndEvent(context.GetCommandList());
+#endif
+
 	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+#ifdef USE_PIX
+	PIXEndEvent(context.GetCommandList()); // Gaussian Blur
+#endif
+
+#ifdef USE_PIX
+	PIXEndEvent(context.GetCommandList()); // Post-Process
+#endif
 
 #ifdef USE_PIX
 	PIXEndEvent(context.GetCommandList());
@@ -731,10 +816,15 @@ void Renderer::ResizeViewport(uint32_t width, uint32_t height)
 	// Resetting the ColorBuffers since we have to recreate a new one.
 	mViewportTexture.reset();
 	mViewportDepth.reset();
+	mBlurTempTexture.reset();
 
 	mViewportTexture = std::make_unique<ColorBuffer>();
 	mViewportTexture->Create(L"ViewportTexture", mViewportWidth, mViewportHeight, 1,
-							 DXGI_FORMAT_R8G8B8A8_UNORM);
+							 DXGI_FORMAT_R8G8B8A8_UNORM, true);
+
+	mBlurTempTexture = std::make_unique<ColorBuffer>();
+	mBlurTempTexture->Create(L"BlurTempTexture", mViewportWidth, mViewportHeight, 1,
+							 DXGI_FORMAT_R8G8B8A8_UNORM, true);
 
 	mViewportDepth = std::make_unique<DepthBuffer>();
 	mViewportDepth->Create(L"ViewportDepth", mViewportWidth, mViewportHeight,
@@ -742,6 +832,12 @@ void Renderer::ResizeViewport(uint32_t width, uint32_t height)
 	mViewportDepth->CreateView(Graphics::gDevice);
 
 	mViewportTexture->CreateSRV(mViewportSRV.GetCpuHandle());
+
+	// Recreate blur descriptors for post process
+	mViewportTexture->CreateSRV(mViewportTextureSRV.GetCpuHandle());
+	mViewportTexture->CreateUAV(mViewportTextureUAV.GetCpuHandle());
+	mBlurTempTexture->CreateSRV(mBlurTempSRV.GetCpuHandle());
+	mBlurTempTexture->CreateUAV(mBlurTempUAV.GetCpuHandle());
 
 	if (mGBuffer)
 	{
