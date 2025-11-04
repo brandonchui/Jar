@@ -2,5 +2,6 @@ build
 assets/icons
 assets/materials
 assets/Roboto
+assets/*.hdr
 assets/*.obj
 imgui.ini
