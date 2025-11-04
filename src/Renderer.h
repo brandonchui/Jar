@@ -27,7 +27,7 @@ class UISystem;
 
 /*
 TODO
-[ ] Deferred
+[x] Deferred
 [ ] Clustered
 [x] Create Scene
 		- only supports a single mesh and texture for rendering
@@ -117,6 +117,9 @@ private:
 
 	// 4 SRVs per entity - albedo, normal, metallic, roughness
 	DescriptorHandle mMaterialTextureSRVStart;
+
+	// 4 SRVs for GBuffer textures - albedo/AO, normal/rough, metallic/flags, emissive
+	DescriptorHandle mGBufferSRVStart;
 
 	std::vector<SpotLight> mSpotLights;
 	std::unique_ptr<Graphics::StructuredBuffer> mLightBuffer;

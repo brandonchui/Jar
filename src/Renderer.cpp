@@ -54,7 +54,7 @@ void Renderer::Initialize(UISystem* uiSystem)
 	mLogger->info("\toffsetof(ambientLight) = {} bytes", offsetof(LightingConstants, ambientLight));
 	mLogger->info("\toffsetof(padding) = {} bytes", offsetof(LightingConstants, padding));
 
-	static_assert(sizeof(LightingConstants) == 32, "LightingConstants size mismatch with Slang");
+	static_assert(sizeof(LightingConstants) == 96, "LightingConstants size mismatch with Slang");
 	static_assert(sizeof(SpotLight) == 64, "SpotLight size mismatch with Slang");
 
 	// Initialize constant buffers.
@@ -185,6 +185,10 @@ void Renderer::Initialize(UISystem* uiSystem)
 	// Recall 4 srv, albedo, normal, mellatic, roughness
 	mMaterialTextureSRVStart = mTextureHeap.Alloc(MAX_MATERIALS * 4);
 
+	// Allocate 5 descriptors for GBuffer textures
+	// Recall Albedo/AO, Normal/Rough, Metallic, Emissive, Depth
+	mGBufferSRVStart = mTextureHeap.Alloc(5);
+
 	mSamplerHandle = mSamplerHeap.Alloc(1);
 	D3D12_SAMPLER_DESC samplerDesc = {};
 	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -214,6 +218,25 @@ void Renderer::Initialize(UISystem* uiSystem)
 	mGBuffer->Create(mViewportWidth, mViewportHeight);
 	mLogger->info("GBuffer created: {}x{}", mViewportWidth, mViewportHeight);
 
+	// Create SRVs for GBuffer textures lighting pass sampling
+	UINT descriptorSize =
+		Graphics::gDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = mGBufferSRVStart.GetCpuHandle();
+
+	mGBuffer->GetRenderTarget0().CreateSRV(srvHandle);
+	srvHandle.ptr += descriptorSize;
+
+	mGBuffer->GetRenderTarget1().CreateSRV(srvHandle);
+	srvHandle.ptr += descriptorSize;
+
+	mGBuffer->GetRenderTarget2().CreateSRV(srvHandle);
+	srvHandle.ptr += descriptorSize;
+
+	mGBuffer->GetRenderTarget3().CreateSRV(srvHandle);
+	srvHandle.ptr += descriptorSize;
+
+	mGBuffer->GetDepthBuffer().CreateSRV(srvHandle);
+
 	// SRV for ImGui to sample the viewport texture
 	// NOTE: Allocate from ImGui's heap so it can reference it when rendering
 	mViewportSRV = uiSystem->AllocateDescriptor(1);
@@ -230,6 +253,9 @@ void Renderer::Update(float deltaTime)
 	auto view = mCamera->GetViewMatrix();
 	auto projection = mCamera->GetProjectionMatrix();
 
+	// Calculate inverse view projection for world position for deferred
+	Matrix4 viewProj = projection * view;
+	mLightingConstants.invViewProj = inverse(viewProj);
 	mLightingConstants.eyePosition = Float3(mCamera->GetPosition());
 
 	mConstants.wvp = projection * view * model;
@@ -265,6 +291,7 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 #endif
 
 	// GEOMETRY PASS
+	//
 #ifdef USE_PIX
 	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(1), L"Geometry Pass");
 #endif
@@ -426,22 +453,52 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 							   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	context.TransitionResource(mGBuffer->GetRenderTarget3(),
 							   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	context.TransitionResource(mGBuffer->GetDepthBuffer(), D3D12_RESOURCE_STATE_DEPTH_READ);
+	context.TransitionResource(mGBuffer->GetDepthBuffer(),
+							   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 #ifdef USE_PIX
 	PIXEndEvent(context.GetCommandList());
 #endif
 
-// LIGHTING PASS
+	// LIGHTING PASS
+
 #ifdef USE_PIX
-	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(2), L"Lighting Pass (TODO)");
+	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(2), L"Lighting Pass");
 #endif
 
-	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	// Upload lighting constants (eye position, num lights, ambient light)
+	mLightingUploadBuffer.Copy(&mLightingConstants, sizeof(LightingConstants), 0);
 
-	// LIGHTING PASS WIP - just render clear color for now
-	float clearColor[4] = {0.0F, 0.0F, 0.0F, 1.0F};
-	context.ClearColor(mViewportTexture->GetRTV(), clearColor);
+	context.SetShader("LightingPass");
+
+	// NOTE This probably should be done automatically but for right now manually
+	// is fine.
+	context.GetCommandList()->SetPipelineState(context.GetPipelineState());
+	context.GetCommandList()->SetGraphicsRootSignature(context.GetRootSignature());
+
+	// Root 0 Bind cbuffer, for lighting pass its just some eye, matrices, number of lights etc.
+	context.SetConstantBuffer(0, mLightingUploadBuffer.GetGpuVirtualAddress());
+
+	// Root 1 Bind GBuffer textures
+	context.GetCommandList()->SetGraphicsRootDescriptorTable(1, mGBufferSRVStart.GetGpuHandle());
+
+	// Root 2 Bind spotlight buffer
+	context.GetCommandList()->SetGraphicsRootDescriptorTable(2, mLightBuffer->GetSRVGpu());
+
+	// The mViewportTexture is our final render target for the imgui widget.
+	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	context.SetRenderTarget(mViewportTexture->GetRTV(), mViewportDepth->GetDSV());
+
+	context.ClearDepth(mViewportDepth->GetDSV(), 1.0F);
+
+	context.SetViewport(0.0F, 0.0F, static_cast<float>(mViewportWidth),
+						static_cast<float>(mViewportHeight));
+	context.SetScissorRect(0, 0, mViewportWidth, mViewportHeight);
+
+	// Draw fullscreen triangle, shader creates the quad.
+	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context.DrawInstanced(3, 1);
+
 	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 #ifdef USE_PIX
@@ -690,6 +747,24 @@ void Renderer::ResizeViewport(uint32_t width, uint32_t height)
 	{
 		mGBuffer->Resize(mViewportWidth, mViewportHeight);
 		mLogger->info("GBuffer resized to: {}x{}", mViewportWidth, mViewportHeight);
+
+		UINT descriptorSize = Graphics::gDevice->GetDescriptorHandleIncrementSize(
+			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = mGBufferSRVStart.GetCpuHandle();
+
+		mGBuffer->GetRenderTarget0().CreateSRV(srvHandle);
+		srvHandle.ptr += descriptorSize;
+
+		mGBuffer->GetRenderTarget1().CreateSRV(srvHandle);
+		srvHandle.ptr += descriptorSize;
+
+		mGBuffer->GetRenderTarget2().CreateSRV(srvHandle);
+		srvHandle.ptr += descriptorSize;
+
+		mGBuffer->GetRenderTarget3().CreateSRV(srvHandle);
+		srvHandle.ptr += descriptorSize;
+
+		mGBuffer->GetDepthBuffer().CreateSRV(srvHandle);
 	}
 
 	SetViewport(width, height);
