@@ -22,7 +22,7 @@ namespace Graphics
 		/// If provided initialData, the function will upload
 		/// automatically.
 		void Create(const std::wstring& name, uint32_t numElements, uint32_t elementSize,
-					const void* initialData = nullptr);
+					const void* initialData = nullptr, bool allowUAV = false);
 
 		/// Uploads the bytes into the GPU. Usually, I use this to put the
 		/// entire array (std::vector for now) in the entire StructuredBuffer
@@ -33,14 +33,22 @@ namespace Graphics
 		/// that we upload.
 		void CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle) const;
 
+		/// Create a UAV for compute shader write access.
+		/// Needs ALLOW_UNORDERED_ACCESS flag
+		void CreateUAV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle);
+
 		uint32_t GetElementCount() const { return mElementCount; }
 		uint32_t GetElementSize() const { return mElementSize; }
 		size_t GetBufferSize() const { return mBufferSize; }
 
 		D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const { return mSrvCpuHandle; }
 		D3D12_GPU_DESCRIPTOR_HANDLE GetSRVGpu() const { return mSrvGpuHandle; }
+		D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const { return mUavCpuHandle; }
+		D3D12_GPU_DESCRIPTOR_HANDLE GetUAVGpu() const { return mUavGpuHandle; }
 
 		void SetSRVHandles(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+						   D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle);
+		void SetUAVHandles(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
 						   D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle);
 
 	private:
@@ -57,6 +65,8 @@ namespace Graphics
 
 		D3D12_CPU_DESCRIPTOR_HANDLE mSrvCpuHandle = {};
 		D3D12_GPU_DESCRIPTOR_HANDLE mSrvGpuHandle = {};
+		D3D12_CPU_DESCRIPTOR_HANDLE mUavCpuHandle = {};
+		D3D12_GPU_DESCRIPTOR_HANDLE mUavGpuHandle = {};
 	};
 
 } // namespace Graphics
