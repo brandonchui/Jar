@@ -451,6 +451,11 @@ void App::RenderUI()
 		mRenderer->UpdateSpotLight();
 	};
 
+	propCallbacks.onBlurIntensityChanged = [this](float intensity) {
+		mRenderer->SetBlurIntensity(intensity);
+	};
+
 	SpotLight* spotlight = mRenderer->GetSpotLight();
-	UI::ShowProperties(&isPropertiesOpen, "", transform, propCallbacks, spotlight);
+	float blurIntensity = mRenderer->GetBlurIntensity();
+	UI::ShowProperties(&isPropertiesOpen, "", transform, propCallbacks, spotlight, &blurIntensity);
 }

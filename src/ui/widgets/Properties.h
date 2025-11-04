@@ -22,9 +22,11 @@ namespace UI
 	{
 		std::function<void(const TransformProperties&)> onTransformChanged;
 		std::function<void()> onSpotLightChanged;
+		std::function<void(float)> onBlurIntensityChanged;
 	};
 
 	void ShowProperties(bool* pOpen, const char* selectedObjectName, TransformProperties& transform,
-						const PropertiesCallbacks& callbacks, SpotLight* spotLight = nullptr);
+						const PropertiesCallbacks& callbacks, SpotLight* spotLight = nullptr,
+						float* blurIntensity = nullptr);
 
 } // namespace UI

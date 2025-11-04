@@ -8,7 +8,8 @@ namespace UI
 {
 
 	void ShowProperties(bool* pOpen, const char* selectedObjectName, TransformProperties& transform,
-						const PropertiesCallbacks& callbacks, SpotLight* spotLight)
+						const PropertiesCallbacks& callbacks, SpotLight* spotLight,
+						float* blurIntensity)
 	{
 
 		if (!ImGui::Begin("Properties", pOpen))
@@ -161,6 +162,25 @@ namespace UI
 			if (lightChanged && callbacks.onSpotLightChanged)
 			{
 				callbacks.onSpotLightChanged();
+			}
+
+			ImGui::Unindent();
+			ImGui::Spacing();
+		}
+
+		// Post Process controls
+		if (blurIntensity &&
+			ImGui::CollapsingHeader("Post Process", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::Indent();
+
+			ImGui::Text("Blur Intensity");
+			if (ImGui::SliderFloat("##BlurIntensity", blurIntensity, 0.0F, 5.0F, "%.2f"))
+			{
+				if (callbacks.onBlurIntensityChanged)
+				{
+					callbacks.onBlurIntensityChanged(*blurIntensity);
+				}
 			}
 
 			ImGui::Unindent();
