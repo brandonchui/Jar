@@ -82,10 +82,12 @@ public:
 	Float2 padding;
 };
 
-// 32 byte struct LightingConstants
+// 96 byte struct LightingConstants
 struct LightingConstants
 {
 public:
+	Matrix4 invViewProj; // 64 bytes
+
 	Float3 eyePosition;
 	uint32_t numActiveLights{};
 
