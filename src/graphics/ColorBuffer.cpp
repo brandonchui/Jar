@@ -5,7 +5,8 @@
 
 ColorBuffer::ColorBuffer() = default;
 
-void ColorBuffer::Create(const wchar_t* name, uint32_t width, uint32_t height, uint32_t arraySize, DXGI_FORMAT format)
+void ColorBuffer::Create(const wchar_t* name, uint32_t width, uint32_t height, uint32_t arraySize,
+						 DXGI_FORMAT format, bool allowUAV)
 {
 	assert(Graphics::gDevice != nullptr);
 	assert(width > 0 && height > 0);
@@ -25,6 +26,8 @@ void ColorBuffer::Create(const wchar_t* name, uint32_t width, uint32_t height, u
 	desc.SampleDesc.Quality = 0;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	if (allowUAV)
+		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 	D3D12_CLEAR_VALUE clearValue = {};
 	clearValue.Format = format;
@@ -102,4 +105,20 @@ void ColorBuffer::CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE srvHandle)
 	srvDesc.Texture2D.MostDetailedMip = 0;
 
 	Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, srvHandle);
+}
+
+void ColorBuffer::CreateUAV(D3D12_CPU_DESCRIPTOR_HANDLE uavHandle)
+{
+	assert(Graphics::gDevice != nullptr);
+	assert(mResource != nullptr);
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.Format = mFormat;
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+	uavDesc.Texture2D.MipSlice = 0;
+	uavDesc.Texture2D.PlaneSlice = 0;
+
+	Graphics::gDevice->CreateUnorderedAccessView(mResource.Get(), nullptr, &uavDesc, uavHandle);
+
+	mUav = DescriptorHandle(uavHandle, {0});
 }
