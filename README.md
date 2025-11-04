@@ -90,9 +90,9 @@ These are the major features that have higher priority and will get more develop
 
 | Feature | Status |
 |---------|:------:|
-| Forward rendering | ✅ |
-| Slang Integration | ✅ |
-| Deferred rendering | ⚠️ |
+| Compute Shaders | ⚠️ |
+| Slang Integration | ⚠️ |
+| Deferred rendering | ✅ |
 | Image based lighting | ❌ |
 | Cluster rendering | ❌ |
 
