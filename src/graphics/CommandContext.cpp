@@ -484,10 +484,22 @@ namespace Graphics
 		mCommandList->SetGraphicsRootConstantBufferView(rootIndex, gpuAddress);
 	}
 
+	void GraphicsContext::SetComputeConstantBuffer(uint32_t rootIndex,
+												   D3D12_GPU_VIRTUAL_ADDRESS gpuAddress)
+	{
+		mCommandList->SetComputeRootConstantBufferView(rootIndex, gpuAddress);
+	}
+
 	void GraphicsContext::SetConstants(uint32_t rootIndex, uint32_t numConstants,
 									   const void* pConstants)
 	{
 		mCommandList->SetGraphicsRoot32BitConstants(rootIndex, numConstants, pConstants, 0);
+	}
+
+	void GraphicsContext::SetComputeConstants(uint32_t rootIndex, uint32_t numConstants,
+											  const void* pConstants)
+	{
+		mCommandList->SetComputeRoot32BitConstants(rootIndex, numConstants, pConstants, 0);
 	}
 
 	void GraphicsContext::SetConstant(uint32_t rootIndex, uint32_t value, uint32_t offset)

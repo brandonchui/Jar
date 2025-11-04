@@ -153,7 +153,9 @@ namespace Graphics
 
 		/// Root sig binding
 		void SetConstantBuffer(uint32_t rootIndex, D3D12_GPU_VIRTUAL_ADDRESS gpuAddress);
+		void SetComputeConstantBuffer(uint32_t rootIndex, D3D12_GPU_VIRTUAL_ADDRESS gpuAddress);
 		void SetConstants(uint32_t rootIndex, uint32_t numConstants, const void* pConstants);
+		void SetComputeConstants(uint32_t rootIndex, uint32_t numConstants, const void* pConstants);
 		void SetConstant(uint32_t rootIndex, uint32_t value, uint32_t offset = 0);
 
 		///IA
