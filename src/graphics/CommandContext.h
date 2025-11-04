@@ -51,6 +51,8 @@ namespace Graphics
 		ID3D12GraphicsCommandList* GetCommandList() const { return mCommandList.Get(); }
 		ID3D12CommandAllocator* GetAllocator() const { return mAllocator.Get(); }
 		D3D12_COMMAND_LIST_TYPE GetType() const { return mType; }
+		ID3D12RootSignature* GetRootSignature() const { return mRootSignature.Get(); }
+		ID3D12PipelineState* GetPipelineState() const { return mPipelineState.Get(); }
 
 	protected:
 		D3D12_COMMAND_LIST_TYPE mType = D3D12_COMMAND_LIST_TYPE_DIRECT;

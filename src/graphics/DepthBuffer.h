@@ -23,6 +23,9 @@ public:
 	/// Create the DSV for this buffer. Will allocate descriptor internally.
 	void CreateView(ID3D12Device* pDevice);
 
+	/// Create an SRV so can be sampled.
+	void CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE srvHandle);
+
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV() const { return mDSV; }
 
 	/// Clears the depth target
