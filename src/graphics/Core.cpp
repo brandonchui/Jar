@@ -139,6 +139,9 @@ namespace Graphics
 
 		gLogger->info("Enumerating adapters(s)...");
 
+		// This will be used to determine the "best" GPU
+		SIZE_T maxDedicatedMemory = 0;
+
 		for (UINT adapterIndex = 0;; adapterIndex++)
 		{
 			Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter1;
@@ -172,10 +175,13 @@ namespace Graphics
 			else
 				gLogger->info("\t\tType: Hardware Adapter");
 
-			// In most cases the first adapter is what we want for our GPU if exist
-			if (adapterIndex == 0)
+			// Select the hardware adapter with the most dedicated VRAM
+			// Skip software adapters
+			if (!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE) &&
+				desc.DedicatedVideoMemory > maxDedicatedMemory)
 			{
 				selectedAdapter = adapter4;
+				maxDedicatedMemory = desc.DedicatedVideoMemory;
 				gLogger->info("\t\t** Using this adapter **");
 			}
 		}
