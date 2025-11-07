@@ -26,6 +26,6 @@ namespace UI
 							   ImVec2& resizeStartMousePos, ImVec2& resizeStartWindowPos,
 							   ImVec2& resizeStartWindowSize, SDL_Cursor* cursorDefault,
 							   SDL_Cursor* cursorNwse, SDL_Cursor* cursorNesw, SDL_Cursor* cursorWe,
-							   SDL_Cursor* cursorNs);
+							   SDL_Cursor* cursorNs, float dpiScale = 1.0f);
 
 } // namespace UI

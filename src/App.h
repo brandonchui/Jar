@@ -115,6 +115,8 @@ private:
 	SDL_Cursor* mCursorWE = nullptr;
 	SDL_Cursor* mCursorNS = nullptr;
 
+	float mDpiScale;
+
 	inline static uint32_t WINDOW_WIDTH = 1280;
 	inline static uint32_t WINDOW_HEIGHT = 720;
 

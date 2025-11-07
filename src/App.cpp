@@ -41,6 +41,19 @@ bool App::Initialize()
 		return false;
 	}
 
+	// Get DPI scale for UI scalig. Querying the info from SDL.
+	SDL_DisplayID displayID = SDL_GetDisplayForWindow(mWindow);
+	if (displayID != 0)
+	{
+		float contentScale = SDL_GetDisplayContentScale(displayID);
+		if (contentScale > 0.0F)
+		{
+			mDpiScale = contentScale;
+		}
+	}
+
+	mLogger->info("Display DPI scale: {:.2f}", mDpiScale);
+
 	// Setting up the global DX12 objects including the debug layers.
 	Graphics::Init();
 
@@ -327,7 +340,7 @@ void App::RenderUI()
 	UI::TitleBarState titleBarState = UI::ShowTitleBar(
 		mWindow, WINDOW_TITLE, mIsDraggingWindow, mDragOffset, mIsResizingWindow, mResizeEdge,
 		mResizeStartMousePos, mResizeStartWindowPos, mResizeStartWindowSize, mCursorDefault,
-		mCursorNWSE, mCursorNESW, mCursorWE, mCursorNS);
+		mCursorNWSE, mCursorNESW, mCursorWE, mCursorNS, mDpiScale);
 
 	if (titleBarState.action == UI::TitleBarAction::Close)
 	{
@@ -336,9 +349,10 @@ void App::RenderUI()
 
 	/// Create dockspace below title bar (from the docking branch).
 	/// NOTE this is using a modified imgui fork.
+	const float titleBarHeight = TITLE_BAR_HEIGHT * mDpiScale;
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x, viewport->WorkPos.y + TITLE_BAR_HEIGHT));
-	ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x, viewport->WorkSize.y - TITLE_BAR_HEIGHT));
+	ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x, viewport->WorkPos.y + titleBarHeight));
+	ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x, viewport->WorkSize.y - titleBarHeight));
 	ImGui::SetNextWindowViewport(viewport->ID);
 
 	ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar;

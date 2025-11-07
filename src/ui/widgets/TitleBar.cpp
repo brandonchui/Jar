@@ -13,15 +13,15 @@ namespace UI
 							   ImVec2& resizeStartMousePos, ImVec2& resizeStartWindowPos,
 							   ImVec2& resizeStartWindowSize, SDL_Cursor* cursorDefault,
 							   SDL_Cursor* cursorNwse, SDL_Cursor* cursorNesw, SDL_Cursor* cursorWe,
-							   SDL_Cursor* cursorNs)
+							   SDL_Cursor* cursorNs, float dpiScale)
 	{
 		TitleBarState state;
 		state.action = TitleBarAction::None;
 		state.isDragging = isDragging;
 		state.isResizing = isResizing;
 
-		const float TITLE_BAR_HEIGHT = 32.0F;
-		const float BUTTON_WIDTH = 46.0F;
+		const float TITLE_BAR_HEIGHT = 32.0F * dpiScale;
+		const float BUTTON_WIDTH = 46.0F * dpiScale;
 
 		// Title bar.
 		ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -53,7 +53,7 @@ namespace UI
 			ImFont* boldFont = UI::GetBoldFont();
 			if (boldFont != nullptr)
 			{
-				ImGui::PushFont(boldFont, 18.0F);
+				ImGui::PushFont(boldFont);
 			}
 
 			ImGui::Text("%s", title);
@@ -120,7 +120,7 @@ namespace UI
 		bool titleBarHovered = ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered();
 
 		// Check if we are in the resize zone.
-		const float RESIZE_BORDER_SIZE = 8.0F;
+		const float RESIZE_BORDER_SIZE = 8.0F * dpiScale;
 		ImVec2 viewportPos = ImGui::GetMainViewport()->Pos;
 		ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
 		ImVec2 mousePos = ImGui::GetMousePos();
