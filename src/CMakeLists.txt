@@ -15,6 +15,8 @@ add_executable(Jar
     Scene.cpp
     OrbitCamera.cpp
     OrbitCamera.h
+    graphics/BindlessAllocator.cpp
+    graphics/BindlessAllocator.h
     graphics/Core.cpp
     graphics/Core.h
     graphics/CommandListManager.cpp
