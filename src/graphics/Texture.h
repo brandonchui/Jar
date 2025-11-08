@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BindlessAllocator.h"
 #include "GpuResource.h"
 #include <d3d12.h>
 #include <string>
@@ -30,7 +31,7 @@ public:
 
 	/// Creates a shader resource view given a DescriptorHandle's
 	/// CPU handle variable.
-	void CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle) const;
+	void CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const { return mSrvCpuHandle; }
 	D3D12_GPU_DESCRIPTOR_HANDLE GetSRVGpu() const { return mSrvGpuHandle; }
@@ -59,6 +60,10 @@ public:
 	/// Clears the buffer from the deferred upload texture data.
 	void ClearUploadBuffer();
 
+	/// Bindless Allocation
+	uint32_t GetSRVIndex() const { return mSrvAllocation.mStartIndex; }
+	bool HasSRV() const { return mSrvAllocation.IsValid(); }
+
 private:
 	void InitLogger();
 	static std::shared_ptr<spdlog::logger> sLogger;
@@ -79,4 +84,7 @@ private:
 	};
 
 	std::unique_ptr<DeferredUploadData> mDeferredUploadData;
+
+	/// Bindless Allocation
+	Allocation mSrvAllocation;
 };

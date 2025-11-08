@@ -19,6 +19,8 @@ struct Allocation
 	uint32_t mGeneration;
 
 	bool IsValid() const { return mCount != UINT32_MAX && mStartIndex != UINT32_MAX; }
+
+	void Reset() { mStartIndex = mCount = mGeneration = UINT32_MAX; }
 };
 
 struct PendingDeletion

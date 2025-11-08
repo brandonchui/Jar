@@ -32,6 +32,8 @@ public:
 
 	uint64_t GetCompletedFenceValue() const { return mFence->GetCompletedValue(); }
 
+	uint64_t GetLastSignaledFenceValue() const { return mNextFenceValue - 1; }
+
 	ID3D12CommandQueue* GetCommandQueue();
 
 private:
