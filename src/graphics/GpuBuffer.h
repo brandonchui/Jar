@@ -34,13 +34,14 @@ public:
 	bool HasSRV() const { return mSrvAllocation.IsValid(); }
 	bool HasUAV() const { return mUavAllocation.IsValid(); }
 
+protected:
+	/// Bindless Allocations
+	Allocation mSrvAllocation;
+	Allocation mUavAllocation;
+
 private:
 	/// Lets Direct3D know how much of the data to read
 	/// from the buffers. It is loaded in from Initialize,
 	/// and we just store the value for later use.
 	UINT mBufferSize = 0;
-
-	/// Bindless Allocations
-	Allocation mSrvAllocation;
-	Allocation mUavAllocation;
 };
