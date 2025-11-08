@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_dx12.h"
+#include <SDL3/SDL.h>
 
 UISystem::~UISystem()
 {
@@ -30,11 +31,22 @@ bool UISystem::Initialize(SDL_Window* window, ID3D12Device* device,
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
+	float dpiScale = 1.0F;
+	SDL_DisplayID displayID = SDL_GetDisplayForWindow(window);
+	if (displayID != 0)
+	{
+		float contentScale = SDL_GetDisplayContentScale(displayID);
+		if (contentScale > 0.0F)
+		{
+			dpiScale = contentScale;
+		}
+	}
+
 	// Apply Material Design theme we made, NOT the defaults
-	UI::ApplyMaterialTheme();
+	UI::ApplyMaterialTheme(dpiScale);
 
 	// Load custom Robot font
-	UI::LoadCustomFont();
+	UI::LoadCustomFont(dpiScale);
 
 	// Setup Platform backend (SDL3)
 	if (!ImGui_ImplSDL3_InitForD3D(window))

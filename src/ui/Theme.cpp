@@ -19,7 +19,7 @@ namespace UI
 		const ImVec4 VIEWPORT_PLACEHOLDER = ImVec4(0.078F, 0.118F, 0.196F,
 												   1.0F); // Dark blue (20, 30, 50)
 	} // namespace AppColors
-	void ApplyMaterialTheme()
+	void ApplyMaterialTheme(float dpiScale)
 	{
 		ImGuiStyle& style = ImGui::GetStyle();
 		ImVec4* colors = style.Colors;
@@ -243,7 +243,7 @@ namespace UI
 		style.AntiAliasedFill = true;
 
 		// Modest UI scaling
-		style.ScaleAllSizes(1.05F);
+		style.ScaleAllSizes(1.05F * dpiScale);
 	}
 
 	void ApplyDefaultDarkTheme()
@@ -256,7 +256,7 @@ namespace UI
 		ImGui::StyleColorsLight();
 	}
 
-	void LoadCustomFont()
+	void LoadCustomFont(float dpiScale)
 	{
 		ImGuiIO& io = ImGui::GetIO();
 
@@ -269,13 +269,17 @@ namespace UI
 		const char* fontPath = "assets/Roboto/static/Roboto-Regular.ttf";
 		const char* boldFontPath = "assets/Roboto/static/Roboto-Bold.ttf";
 
+		// Scale font sizes
+		float regularFontSize = REGULAR_FONT_SIZE * dpiScale;
+		float boldFontSize = BOLD_FONT_SIZE * dpiScale;
+
 		std::ifstream fontFile(fontPath);
 		bool fontExists = fontFile.good();
 		fontFile.close();
 
 		if (fontExists)
 		{
-			ImFont* font = io.Fonts->AddFontFromFileTTF(fontPath, 16.0F, &fontConfig);
+			ImFont* font = io.Fonts->AddFontFromFileTTF(fontPath, regularFontSize, &fontConfig);
 
 			if (font != nullptr)
 			{
@@ -298,7 +302,7 @@ namespace UI
 
 		if (boldFontExists)
 		{
-			g_BoldFont = io.Fonts->AddFontFromFileTTF(boldFontPath, 18.0F, &fontConfig);
+			g_BoldFont = io.Fonts->AddFontFromFileTTF(boldFontPath, boldFontSize, &fontConfig);
 		}
 
 		io.FontGlobalScale = 1.0F;

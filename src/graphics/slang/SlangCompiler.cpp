@@ -340,7 +340,8 @@ namespace SlangHelper
 			if (epReflection && epReflection->getStage() == SLANG_STAGE_VERTEX)
 			{
 				// SlangInputLayout.h
-				result.inputLayout = ExtractInputLayoutFromReflection(epReflection, result.semanticNames);
+				result.inputLayout = ExtractInputLayoutFromReflection(epReflection,
+																	  result.semanticNames);
 				GetLogger()->info("\tFound {} input elements", result.inputLayout.size());
 			}
 		}
