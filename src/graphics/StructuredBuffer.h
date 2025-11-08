@@ -31,7 +31,7 @@ namespace Graphics
 
 		/// We create a shader resource view so the shader can see the data
 		/// that we upload.
-		void CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle) const;
+		void CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle);
 
 		/// Create a UAV for compute shader write access.
 		/// Needs ALLOW_UNORDERED_ACCESS flag
