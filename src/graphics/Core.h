@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BindlessAllocator.h"
 #include "d3dcommon.h"
 #include <wrl.h>
 #include <d3d12.h>
@@ -14,7 +15,7 @@ namespace Graphics
 {
 	class GraphicsContext;
 	class ShaderCache;
-}
+} // namespace Graphics
 
 /// Global D3D12 graphics system state and initialization.
 /// Contains:
@@ -31,6 +32,7 @@ namespace Graphics
 	extern D3D_FEATURE_LEVEL gD3DFeatureLevel;
 	extern D3D12MA::Allocator* gAllocator;
 	extern DescriptorAllocator* gDescriptorAllocator[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
+	extern BindlessAllocator* gBindlessAllocator;
 
 	extern CommandListManager* gCommandListManager;
 	extern GraphicsContext* gGraphicsContext;

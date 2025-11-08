@@ -1,5 +1,6 @@
 #include "Renderer.h"
 #include "OrbitCamera.h"
+#include "graphics/Core.h"
 #include "ui/UISystem.h"
 #include "d3d12.h"
 #include "graphics/CommandContext.h"
@@ -266,6 +267,11 @@ void Renderer::Initialize(UISystem* uiSystem)
 
 void Renderer::Update(float deltaTime)
 {
+	// Delete any descriptor allocations form previous frames
+	uint64_t completedFence =
+		Graphics::gCommandListManager->GetGraphicsQueue().GetCompletedFenceVlaue();
+	Graphics::gBindlessAllocator->ProcessDeletions(completedFence);
+
 	mCamera->Update(deltaTime);
 
 	auto model = Matrix4::identity();

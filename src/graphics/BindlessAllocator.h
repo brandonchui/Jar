@@ -31,9 +31,10 @@ class BindlessAllocator
 
 public:
 	BindlessAllocator() = default;
-	~BindlessAllocator();
+	~BindlessAllocator() = default;
 
 	bool Initialize(uint32_t numDescriptors, D3D12_DESCRIPTOR_HEAP_TYPE descriptorType);
+
 	void Shutdown();
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandleStart() const { return mCpuStart; }

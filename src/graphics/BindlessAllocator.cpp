@@ -59,6 +59,26 @@ bool BindlessAllocator::Initialize(uint32_t numDescriptors,
 	return true;
 }
 
+void BindlessAllocator::Shutdown()
+{
+	// Process any remaining pending deletions before we ultimately shutdown
+	if (!mPendingDeletion.empty())
+	{
+		sLogger->warn("Shutting down with {} pending deletions", mPendingDeletion.size());
+
+		while (!mPendingDeletion.empty())
+		{
+			Free(mPendingDeletion.front().mAllocation);
+			mPendingDeletion.pop();
+		}
+	}
+
+	mFreeList.clear();
+	mHeap.Reset();
+
+	sLogger->info("Shutdown complete");
+}
+
 Allocation BindlessAllocator::Allocate(uint32_t count)
 {
 	Allocation res = {};
@@ -76,7 +96,7 @@ Allocation BindlessAllocator::Allocate(uint32_t count)
 		if (mNextFreeIndex + count > mHeapCount)
 		{
 			sLogger->error("Out of bounds");
-			return {.mCount = UINT32_MAX, .mStartIndex = UINT32_MAX};
+			return {.mStartIndex = UINT32_MAX, .mCount = UINT32_MAX};
 		}
 
 		// Free list is empty OR no suitable allocation
@@ -119,9 +139,28 @@ DescriptorHandle BindlessAllocator::GetHandle(uint32_t index)
 
 void BindlessAllocator::FreeDeferred(Allocation allocation, uint64_t fence)
 {
-	//TODO
+	mPendingDeletion.push({.mAllocation = allocation, .mFence = fence});
+	sLogger->info("Deferred Deletionf for allocation at fence {}", fence);
 }
+
 void BindlessAllocator::ProcessDeletions(uint64_t completedFence)
 {
-	//TODO
+	while (!mPendingDeletion.empty())
+	{
+		auto& pendingDeletion = mPendingDeletion.front();
+
+		if (pendingDeletion.mFence <= completedFence)
+		{
+			Free(pendingDeletion.mAllocation);
+			mPendingDeletion.pop();
+		}
+		else
+		{
+			// The fence is still being worked on, so stop checking the rest.
+			// Assumes all fences in the rest of the queue are larger.
+			break;
+		}
+	}
+
+	// sLogger->info("Pending deletions from fence {} are now deleted.", completedFence);
 }
