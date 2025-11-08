@@ -15,6 +15,9 @@ struct Allocation
 	uint32_t mStartIndex;
 	uint32_t mCount;
 
+	/// Using generations to prevent stale or invalid indices.
+	uint32_t mGeneration;
+
 	bool IsValid() const { return mCount != UINT32_MAX && mStartIndex != UINT32_MAX; }
 };
 
@@ -52,12 +55,19 @@ public:
 	void FreeDeferred(Allocation allocation, uint64_t fence);
 	void ProcessDeletions(uint64_t completedFence);
 
+	/// Generation
+	uint32_t GetGeneration(uint32_t index) { return mGenerations[index]; }
+
+	bool IsValid(const Allocation& allocation) const;
+
 private:
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mHeap;
 	D3D12_DESCRIPTOR_HEAP_TYPE mDescriptorType;
 
 	uint32_t mHeapCount;
 	uint32_t mNextFreeIndex;
+
+	std::vector<uint32_t> mGenerations;
 
 	uint32_t mDescriptorSize;
 

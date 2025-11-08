@@ -34,6 +34,9 @@ bool BindlessAllocator::Initialize(uint32_t numDescriptors,
 		mIsShaderVisible = true;
 	}
 
+	// Init with descriptor size and all zeroes
+	mGenerations.resize(numDescriptors, 0);
+
 	mDescriptorSize = Graphics::gDevice->GetDescriptorHandleIncrementSize(mDescriptorType);
 
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
@@ -88,6 +91,7 @@ Allocation BindlessAllocator::Allocate(uint32_t count)
 		// Free list contains available _count_ of descriptors. Use the value pair to get start.
 		res.mCount = count;
 		res.mStartIndex = mFreeList.at(count).back();
+		res.mGeneration = mGenerations[res.mStartIndex];
 
 		mFreeList.at(count).pop_back();
 	}
@@ -96,13 +100,14 @@ Allocation BindlessAllocator::Allocate(uint32_t count)
 		if (mNextFreeIndex + count > mHeapCount)
 		{
 			sLogger->error("Out of bounds");
-			return {.mStartIndex = UINT32_MAX, .mCount = UINT32_MAX};
+			return {.mStartIndex = UINT32_MAX, .mCount = UINT32_MAX, .mGeneration = UINT32_MAX};
 		}
 
 		// Free list is empty OR no suitable allocation
 		// TODO should be implemented to find split blocks or something
 		res.mCount = count;
 		res.mStartIndex = mNextFreeIndex;
+		res.mGeneration = mGenerations[res.mStartIndex];
 
 		mNextFreeIndex += count;
 	}
@@ -118,6 +123,14 @@ bool BindlessAllocator::Free(Allocation allocation)
 	}
 
 	mFreeList[allocation.mCount].push_back(allocation.mStartIndex);
+
+	uint32_t total = allocation.mStartIndex + allocation.mCount;
+
+	// NOTE Not sure if I am considering overflow at UINT32_MAX ?
+	for (uint32_t i = allocation.mStartIndex; i < total; ++i)
+	{
+		mGenerations[i]++;
+	}
 
 	sLogger->info("Freed {} descriptors at index {}", allocation.mCount, allocation.mStartIndex);
 
@@ -163,4 +176,15 @@ void BindlessAllocator::ProcessDeletions(uint64_t completedFence)
 	}
 
 	// sLogger->info("Pending deletions from fence {} are now deleted.", completedFence);
+}
+
+bool BindlessAllocator::IsValid(const Allocation& allocation) const
+{
+
+	if (allocation.mStartIndex >= mHeapCount)
+	{
+		return false;
+	}
+
+	return mGenerations[allocation.mStartIndex] == allocation.mGeneration;
 }

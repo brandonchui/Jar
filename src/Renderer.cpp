@@ -269,7 +269,7 @@ void Renderer::Update(float deltaTime)
 {
 	// Delete any descriptor allocations form previous frames
 	uint64_t completedFence =
-		Graphics::gCommandListManager->GetGraphicsQueue().GetCompletedFenceVlaue();
+		Graphics::gCommandListManager->GetGraphicsQueue().GetCompletedFenceValue();
 	Graphics::gBindlessAllocator->ProcessDeletions(completedFence);
 
 	mCamera->Update(deltaTime);
