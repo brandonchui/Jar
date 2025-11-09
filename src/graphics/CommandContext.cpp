@@ -59,10 +59,11 @@ namespace Graphics
 		hr = mCommandList->Reset(mAllocator.Get(), mPipelineState.Get());
 		assert(SUCCEEDED(hr) && "Failed to reset command list");
 
-		if (mRootSignature)
-		{
-			mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
-		}
+		// NOTE Commented out for bindless
+		// if (mRootSignature)
+		// {
+		// 	mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
+		// }
 	}
 
 	void CommandContext::Flush(bool waitForCompletion)
@@ -232,7 +233,6 @@ namespace Graphics
 			auto* cached = Graphics::gShaderCache->Get(cacheKey);
 			mRootSignature = cached->rootSignature;
 			mPipelineState = cached->pipelineState;
-			// sLogger->info("Using cached MRT shader: {}", shaderName);
 			return;
 		}
 
@@ -363,6 +363,7 @@ namespace Graphics
 	{
 		if (mRootSignature)
 		{
+			InitLogger();
 			mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
 		}
 
