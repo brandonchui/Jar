@@ -69,10 +69,10 @@ void Renderer::Initialize(UISystem* uiSystem)
 	// Clear the material buffer to prevent garbage data
 	{
 		MaterialConstants zeroMat = {};
-		const uint32_t materialAlignment = (sizeof(MaterialConstants) + 255U) & ~255U;
+		const uint32_t MATERIAL_ALIGNMENT = (sizeof(MaterialConstants) + 255U) & ~255U;
 		for (uint32_t i = 0; i < 64; ++i)
 		{
-			mMaterialUploadBuffer.Copy(&zeroMat, sizeof(MaterialConstants), i * materialAlignment);
+			mMaterialUploadBuffer.Copy(&zeroMat, sizeof(MaterialConstants), i * MATERIAL_ALIGNMENT);
 		}
 	}
 
@@ -165,6 +165,10 @@ void Renderer::Initialize(UISystem* uiSystem)
 	mLightBuffer->CreateSRV(lightHandle.GetCpuHandle());
 	mLightBuffer->SetSRVHandles(lightHandle.GetCpuHandle(), lightHandle.GetGpuHandle());
 
+#ifdef ENABLE_BINDLESS
+	mLogger->info("Textures using bindless heap with {} descriptors",
+				  Graphics::gBindlessAllocator->GetHeapSize());
+#else
 	mMaterialCBVStart = mTextureHeap.Alloc(MAX_MATERIALS);
 
 	const uint32_t MATERIAL_BUFFER_ALIGNMENT = (sizeof(MaterialConstants) + 255U) & ~255U;
@@ -190,6 +194,7 @@ void Renderer::Initialize(UISystem* uiSystem)
 	// Allocate 5 descriptors for GBuffer textures
 	// Recall Albedo/AO, Normal/Rough, Metallic, Emissive, Depth
 	mGBufferSRVStart = mTextureHeap.Alloc(5);
+#endif
 
 	mSamplerHandle = mSamplerHeap.Alloc(1);
 	D3D12_SAMPLER_DESC samplerDesc = {};
@@ -225,6 +230,16 @@ void Renderer::Initialize(UISystem* uiSystem)
 	mGBuffer->Create(mViewportWidth, mViewportHeight);
 	mLogger->info("GBuffer created: {}x{}", mViewportWidth, mViewportHeight);
 
+	// G BUFFER SRV
+#ifdef ENABLE_BINDLESS
+	// Create SRVs in bindless heap for GBuffer textures
+	// These are needed for the lighting pass to sample from GBuffer
+	mGBuffer->GetRenderTarget0().CreateSRV({});
+	mGBuffer->GetRenderTarget1().CreateSRV({});
+	mGBuffer->GetRenderTarget2().CreateSRV({});
+	mGBuffer->GetRenderTarget3().CreateSRV({});
+	mGBuffer->GetDepthBuffer().CreateSRV({});
+#else
 	// Create SRVs for GBuffer textures lighting pass sampling
 	UINT descriptorSize =
 		Graphics::gDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -243,6 +258,7 @@ void Renderer::Initialize(UISystem* uiSystem)
 	srvHandle.ptr += descriptorSize;
 
 	mGBuffer->GetDepthBuffer().CreateSRV(srvHandle);
+#endif
 
 	// SRV for ImGui to sample the viewport texture
 	// NOTE: Allocate from ImGui's heap so it can reference it when rendering
@@ -250,17 +266,22 @@ void Renderer::Initialize(UISystem* uiSystem)
 	mViewportTexture->CreateSRV(mViewportSRV.GetCpuHandle());
 
 	// Post process initialization SRV,UAV
+#ifdef ENABLE_BINDLESS
+	mViewportTexture->CreateSRV({});
+	mViewportTexture->CreateUAV({});
+	mBlurTempTexture->CreateSRV({});
+	mBlurTempTexture->CreateUAV({});
+#else
 	mViewportTextureSRV = mTextureHeap.Alloc(1);
 	mViewportTextureUAV = mTextureHeap.Alloc(1);
-
 	mBlurTempSRV = mTextureHeap.Alloc(1);
 	mBlurTempUAV = mTextureHeap.Alloc(1);
 
 	mViewportTexture->CreateSRV(mViewportTextureSRV.GetCpuHandle());
 	mViewportTexture->CreateUAV(mViewportTextureUAV.GetCpuHandle());
-
 	mBlurTempTexture->CreateSRV(mBlurTempSRV.GetCpuHandle());
 	mBlurTempTexture->CreateUAV(mBlurTempUAV.GetCpuHandle());
+#endif
 
 	mLogger->info("Viewport offscreen texture created: {}x{}", mViewportWidth, mViewportHeight);
 }
@@ -297,15 +318,15 @@ void Renderer::Update(float deltaTime)
 
 void Renderer::Render(Graphics::GraphicsContext& context)
 {
-	DXGI_FORMAT rtFormats[4] = {//
-								// RT0: Albedo/AO
-								DXGI_FORMAT_R8G8B8A8_UNORM,
-								// RT1: Normal/Roughness
-								DXGI_FORMAT_R16G16B16A16_FLOAT,
-								// RT2: Metallic/Flags
-								DXGI_FORMAT_R8G8B8A8_UNORM,
-								// RT3: Emissive
-								DXGI_FORMAT_R16G16B16A16_FLOAT};
+	std::array<DXGI_FORMAT, 4> rtFormats = {//
+											// RT0: Albedo/AO
+											DXGI_FORMAT_R8G8B8A8_UNORM,
+											// RT1: Normal/Roughness
+											DXGI_FORMAT_R16G16B16A16_FLOAT,
+											// RT2: Metallic/Flags
+											DXGI_FORMAT_R8G8B8A8_UNORM,
+											// RT3: Emissive
+											DXGI_FORMAT_R16G16B16A16_FLOAT};
 
 	context.Begin();
 
@@ -319,7 +340,26 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(1), L"Geometry Pass");
 #endif
 
+#ifdef ENABLE_BINDLESS
+	ID3D12DescriptorHeap* bindlessHeap = Graphics::gBindlessAllocator->GetHeap();
+	ID3D12DescriptorHeap* samplerHeap = mSamplerHeap.GetHeapPointer();
+
+	if (!bindlessHeap)
+	{
+		mLogger->error("BINDLESS HEAP IS NULL!");
+	}
+
+	if (!samplerHeap)
+	{
+		mLogger->error("SAMPLER HEAP IS NULL!");
+	}
+
+	context.SetDescriptorHeaps(bindlessHeap, samplerHeap);
+
+	context.SetShaderMRT("GeometryPassBindless", rtFormats.data(), 4, DXGI_FORMAT_D32_FLOAT);
+#else
 	context.SetShaderMRT("GeometryPass", rtFormats, 4, DXGI_FORMAT_D32_FLOAT);
+#endif
 
 	context.BindGraphicsPipeline();
 
@@ -334,7 +374,9 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+#ifndef ENABLE_BINDLESS
 	context.SetDescriptorHeaps(mTextureHeap, mSamplerHeap);
+#endif
 
 	int entityCount = 0;
 	const uint32_t CONSTANT_BUFFER_ALIGNMENT = (sizeof(Transform) + 255U) & ~255U;
@@ -384,6 +426,35 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 		context.SetConstantBuffer(1, mMaterialUploadBuffer.GetGpuVirtualAddress() +
 										 materialBufferOffset);
 
+#ifdef ENABLE_BINDLESS
+
+		// Since vectormath does SIMD sizing, prefer to use the DirectX math libs here
+		struct MaterialResources
+		{
+			DirectX::XMUINT2 mAlbedoTex;
+			DirectX::XMUINT2 mNormalTex;
+			DirectX::XMUINT2 mMetallicTex;
+			DirectX::XMUINT2 mRoughnessTex;
+		};
+
+		MaterialResources resources = {};
+
+		resources.mAlbedoTex.x = mat.mAlbedoTexture ? mat.mAlbedoTexture->GetSRVIndex() : 0;
+		resources.mAlbedoTex.y = 0; // Sampler
+
+		resources.mNormalTex.x = mat.mNormalTexture ? mat.mNormalTexture->GetSRVIndex() : 0;
+		resources.mNormalTex.y = 0;
+
+		resources.mMetallicTex.x = mat.mMetallicTexture ? mat.mMetallicTexture->GetSRVIndex() : 0;
+		resources.mMetallicTex.y = 0;
+
+		resources.mRoughnessTex.x = mat.mRoughnessTexture ? mat.mRoughnessTexture->GetSRVIndex()
+														  : 0;
+		resources.mRoughnessTex.y = 0;
+
+		// Set as root constants (b2) - 8 uint32s, 32 bytes
+		context.GetCommandList()->SetGraphicsRoot32BitConstants(2, 8, &resources, 0);
+#else
 		const uint32_t DESCRIPTOR_SIZE = Graphics::gDevice->GetDescriptorHandleIncrementSize(
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
@@ -459,6 +530,7 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 		materialTextureSRVHandle.ptr +=
 			static_cast<UINT64>(MATERIAL_TEXTURE_SRV_OFFSET * DESCRIPTOR_SIZE);
 		context.GetCommandList()->SetGraphicsRootDescriptorTable(2, materialTextureSRVHandle);
+#endif
 
 		D3D12_VERTEX_BUFFER_VIEW vbv = mesh->GetVertexBuffer().VertexBufferView(sizeof(Vertex));
 		context.SetVertexBuffer(vbv);
@@ -487,7 +559,6 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 #endif
 
 	// LIGHTING PASS
-
 #ifdef USE_PIX
 	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(2), L"Lighting Pass");
 #endif
@@ -495,7 +566,15 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 	// Upload lighting constants (eye position, num lights, ambient light)
 	mLightingUploadBuffer.Copy(&mLightingConstants, sizeof(LightingConstants), 0);
 
+#ifdef ENABLE_BINDLESS
+
+	context.SetDescriptorHeaps(Graphics::gBindlessAllocator->GetHeap(),
+							   mSamplerHeap.GetHeapPointer());
+	context.SetShader("LightingPassBindless");
+#else
+	context.SetDescriptorHeaps(mTextureHeap, mSamplerHeap);
 	context.SetShader("LightingPass");
+#endif
 
 	// NOTE This probably should be done automatically but for right now manually
 	// is fine.
@@ -505,11 +584,48 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 	// Root 0 Bind cbuffer, for lighting pass its just some eye, matrices, number of lights etc.
 	context.SetConstantBuffer(0, mLightingUploadBuffer.GetGpuVirtualAddress());
 
-	// Root 1 Bind GBuffer textures
+// Root 1 Bind GBuffer textures
+#ifdef ENABLE_BINDLESS
+	{
+		// Struct matches LightingPassBindless.slang's GBufferResources
+		struct GBufferResources
+		{
+			DirectX::XMUINT2 mAlbedoAo;
+			DirectX::XMUINT2 mNormalRoughness;
+			DirectX::XMUINT2 mMetallicFlags;
+			DirectX::XMUINT2 mEmissive;
+			DirectX::XMUINT2 mDepth;
+			DirectX::XMUINT2 mSpotLights;
+		};
+
+		GBufferResources gbuffer = {};
+		gbuffer.mAlbedoAo.x = mGBuffer->GetRenderTarget0().GetSRVIndex();
+		gbuffer.mAlbedoAo.y = 0;
+
+		gbuffer.mNormalRoughness.x = mGBuffer->GetRenderTarget1().GetSRVIndex();
+		gbuffer.mNormalRoughness.y = 0;
+
+		gbuffer.mMetallicFlags.x = mGBuffer->GetRenderTarget2().GetSRVIndex();
+		gbuffer.mMetallicFlags.y = 0;
+
+		gbuffer.mEmissive.x = mGBuffer->GetRenderTarget3().GetSRVIndex();
+		gbuffer.mEmissive.y = 0;
+
+		gbuffer.mDepth.x = mGBuffer->GetDepthBuffer().GetSRVIndex();
+		gbuffer.mDepth.y = 0;
+
+		gbuffer.mSpotLights.x = mLightBuffer->GetSRVIndex();
+		gbuffer.mSpotLights.y = 0;
+
+		// Set as root constants (b1) - 12 uint32s, 48 bytes
+		context.GetCommandList()->SetGraphicsRoot32BitConstants(1, 12, &gbuffer, 0);
+	}
+#else
 	context.GetCommandList()->SetGraphicsRootDescriptorTable(1, mGBufferSRVStart.GetGpuHandle());
 
 	// Root 2 Bind spotlight buffer
 	context.GetCommandList()->SetGraphicsRootDescriptorTable(2, mLightBuffer->GetSRVGpu());
+#endif
 
 	// The mViewportTexture is our final render target for the imgui widget.
 	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -543,14 +659,40 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(211), "Blur Horizontal");
 #endif
 
+#ifdef ENABLE_BINDLESS
+	context.SetDescriptorHeaps(Graphics::gBindlessAllocator->GetHeap(),
+							   mSamplerHeap.GetHeapPointer());
+	context.SetComputeShader("BlurHorizontalBindless");
+#else
 	context.SetComputeShader("BlurHorizontal");
 	context.SetDescriptorHeaps(mTextureHeap);
+#endif
 	context.BindComputePipeline();
 
 	context.SetComputeConstants(0, 1, &mBlurIntensity);
 
+#ifdef ENABLE_BINDLESS
+	{
+		struct ComputeResources
+		{
+			DirectX::XMUINT2 mInputTex;
+			DirectX::XMUINT2 mOutputTex;
+		};
+
+		ComputeResources resources = {};
+
+		resources.mInputTex.x = mViewportTexture->GetSRVIndex();
+		resources.mInputTex.y = 0;
+
+		resources.mOutputTex.x = mBlurTempTexture->GetUAVIndex();
+		resources.mOutputTex.y = 0;
+
+		context.GetCommandList()->SetComputeRoot32BitConstants(1, 4, &resources, 0);
+	}
+#else
 	context.SetComputeRootDescriptorTable(1, mViewportTextureSRV);
 	context.SetComputeRootDescriptorTable(2, mBlurTempUAV);
+#endif
 
 	uint32_t groupsX = (mViewportWidth + 7) / 8;
 	uint32_t groupsY = (mViewportHeight + 7) / 8;
@@ -568,13 +710,39 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(212), "Blur Vertical");
 #endif
 
+#ifdef ENABLE_BINDLESS
+	context.SetDescriptorHeaps(Graphics::gBindlessAllocator->GetHeap(),
+							   mSamplerHeap.GetHeapPointer());
+	context.SetComputeShader("BlurVerticalBindless");
+#else
 	context.SetComputeShader("BlurVertical");
+#endif
 	context.BindComputePipeline();
 
 	context.SetComputeConstants(0, 1, &mBlurIntensity);
 
+#ifdef ENABLE_BINDLESS
+	{
+		struct ComputeResources
+		{
+			DirectX::XMUINT2 mInputTex;
+			DirectX::XMUINT2 mOutputTex;
+		};
+
+		ComputeResources resources = {};
+
+		resources.mInputTex.x = mBlurTempTexture->GetSRVIndex();
+		resources.mInputTex.y = 0;
+
+		resources.mOutputTex.x = mViewportTexture->GetUAVIndex();
+		resources.mOutputTex.y = 0;
+
+		context.GetCommandList()->SetComputeRoot32BitConstants(1, 4, &resources, 0);
+	}
+#else
 	context.SetComputeRootDescriptorTable(1, mBlurTempSRV);
 	context.SetComputeRootDescriptorTable(2, mViewportTextureUAV);
+#endif
 
 	context.Dispatch(groupsX, groupsY, 1);
 
@@ -642,10 +810,8 @@ std::shared_ptr<Mesh> Renderer::LoadMesh(const std::string& objPath)
 
 	mesh->UploadToGPU();
 
-	mMeshCache[objPath] = mesh;
-
 	mLogger->info("Mesh loaded successfully");
-	return mesh;
+	return mMeshCache[objPath] = mesh;
 }
 
 std::shared_ptr<Texture> Renderer::LoadTexture(const std::wstring& ddsPath)
@@ -673,10 +839,8 @@ std::shared_ptr<Texture> Renderer::LoadTexture(const std::wstring& ddsPath)
 	texture->CreateSRV(textureHandle.GetCpuHandle());
 	texture->SetSRVHandles(textureHandle.GetCpuHandle(), textureHandle.GetGpuHandle());
 
-	mTextureCache[ddsPath] = texture;
-
 	mLogger->info("Texture loaded successfully");
-	return texture;
+	return mTextureCache[ddsPath] = texture;
 }
 
 MaterialAsset Renderer::LoadMaterialAsset(const std::string& materialName)
@@ -708,7 +872,7 @@ MaterialAsset Renderer::LoadMaterialAsset(const std::string& materialName)
 		nlohmann::json j;
 		file >> j;
 
-		std::string basePath = "assets/materials/" + materialName + "/";
+		// std::string basePath = "assets/materials/" + materialName + "/";
 
 		if (j.contains("albedo") && !j["albedo"].get<std::string>().empty())
 		{
@@ -840,16 +1004,30 @@ void Renderer::ResizeViewport(uint32_t width, uint32_t height)
 	mViewportTexture->CreateSRV(mViewportSRV.GetCpuHandle());
 
 	// Recreate blur descriptors for post process
+#ifdef ENABLE_BINDLESS
+	mViewportTexture->CreateSRV({});
+	mViewportTexture->CreateUAV({});
+	mBlurTempTexture->CreateSRV({});
+	mBlurTempTexture->CreateUAV({});
+#else
 	mViewportTexture->CreateSRV(mViewportTextureSRV.GetCpuHandle());
 	mViewportTexture->CreateUAV(mViewportTextureUAV.GetCpuHandle());
 	mBlurTempTexture->CreateSRV(mBlurTempSRV.GetCpuHandle());
 	mBlurTempTexture->CreateUAV(mBlurTempUAV.GetCpuHandle());
+#endif
 
 	if (mGBuffer)
 	{
 		mGBuffer->Resize(mViewportWidth, mViewportHeight);
 		mLogger->info("GBuffer resized to: {}x{}", mViewportWidth, mViewportHeight);
 
+#ifdef ENABLE_BINDLESS
+		mGBuffer->GetRenderTarget0().CreateSRV({});
+		mGBuffer->GetRenderTarget1().CreateSRV({});
+		mGBuffer->GetRenderTarget2().CreateSRV({});
+		mGBuffer->GetRenderTarget3().CreateSRV({});
+		mGBuffer->GetDepthBuffer().CreateSRV({});
+#else
 		UINT descriptorSize = Graphics::gDevice->GetDescriptorHandleIncrementSize(
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = mGBufferSRVStart.GetCpuHandle();
@@ -867,6 +1045,7 @@ void Renderer::ResizeViewport(uint32_t width, uint32_t height)
 		srvHandle.ptr += descriptorSize;
 
 		mGBuffer->GetDepthBuffer().CreateSRV(srvHandle);
+#endif
 	}
 
 	SetViewport(width, height);
