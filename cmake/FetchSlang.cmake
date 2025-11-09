@@ -7,7 +7,7 @@ if(USE_SLANG)
     if(USE_SLANG_PREBUILT)
         message(STATUS "Using prebuilt Slang binaries...")
 
-        set(SLANG_VERSION "2024.14.6")
+        set(SLANG_VERSION "2025.21.2")
         set(SLANG_URL "https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/slang-${SLANG_VERSION}-windows-x86_64.zip")
 
         set(SLANG_PREBUILT_DIR "${CMAKE_BINARY_DIR}/_deps/slang_prebuilt-src")
