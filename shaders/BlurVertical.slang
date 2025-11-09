@@ -13,7 +13,6 @@ struct ComputeResources
 	Texture2D.Handle inputTexture;
 	RWTexture2DHandle outputTexture;
 };
-j
 ConstantBuffer<ComputeResources> g_resources : register(b1);
 
 #define INPUT_TEXTURE g_resources.inputTexture
