@@ -1,10 +1,25 @@
 #include "DepthBuffer.h"
 #include "Core.h"
 #include "CommandContext.h"
+#include "CommandListManager.h"
 #include <d3dx12/d3dx12.h>
 #include <cassert>
 
-DepthBuffer::DepthBuffer() = default;
+DepthBuffer::DepthBuffer()
+{
+	mSrvAllocation.Reset();
+}
+
+DepthBuffer::~DepthBuffer()
+{
+	if (mSrvAllocation.IsValid())
+	{
+		uint64_t lastSignaledFence =
+			Graphics::gCommandListManager->GetGraphicsQueue().GetLastSignaledFenceValue();
+		Graphics::gBindlessAllocator->FreeDeferred(mSrvAllocation, lastSignaledFence);
+		mSrvAllocation.Reset();
+	}
+}
 
 void DepthBuffer::Create(const wchar_t* name, uint32_t width, uint32_t height, DXGI_FORMAT format)
 {
@@ -100,7 +115,25 @@ void DepthBuffer::CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE srvHandle)
 	srvDesc.Texture2D.PlaneSlice = 0;
 	srvDesc.Texture2D.ResourceMinLODClamp = 0.0F;
 
-	Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, srvHandle);
+	// If we actually get a valid paramter, it is probably the UI system or something else
+	if (srvHandle.ptr != 0)
+	{
+		Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, srvHandle);
+	}
+	else
+	{
+		// Carry on with bindless
+		mSrvAllocation = Graphics::gBindlessAllocator->Allocate(1);
+		if (!mSrvAllocation.IsValid())
+		{
+			return;
+		}
+
+		DescriptorHandle handle =
+			Graphics::gBindlessAllocator->GetHandle(mSrvAllocation.mStartIndex);
+		Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc,
+													handle.GetCpuHandle());
+	}
 }
 
 void DepthBuffer::Clear(Graphics::GraphicsContext& context, float depth)

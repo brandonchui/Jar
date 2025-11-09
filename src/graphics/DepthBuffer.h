@@ -2,10 +2,12 @@
 
 #include "PixelBuffer.h"
 #include "DescriptorHeap.h"
+#include "BindlessAllocator.h"
 
 namespace Graphics
 {
 	class GraphicsContext;
+	extern BindlessAllocator* gBindlessAllocator;
 }
 
 /// Creates a Depth Buffer with some standard start up settings
@@ -14,6 +16,7 @@ class DepthBuffer : public PixelBuffer
 {
 public:
 	DepthBuffer();
+	~DepthBuffer();
 
 	/// Creates a ID3D12Resource as the depth buffer.
 	/// Sets the initial state to D3D12_RESOURCE_STATE_DEPTH_WRITE;
@@ -28,9 +31,18 @@ public:
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV() const { return mDSV; }
 
+	uint32_t GetSRVIndex() const
+	{
+		return mSrvAllocation.IsValid()
+			? mSrvAllocation.mStartIndex
+			: Graphics::gBindlessAllocator->GetNullDescriptorIndex(NullDescriptor::Texture2D);
+	}
+	bool HasSRV() const { return mSrvAllocation.IsValid(); }
+
 	/// Clears the depth target
 	void Clear(Graphics::GraphicsContext& context, float depth = 1.0F);
 
 private:
 	DescriptorHandle mDSV;
+	Allocation mSrvAllocation;
 };

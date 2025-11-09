@@ -74,9 +74,9 @@ namespace Graphics
 		/// Convenience wrapper for setting descriptor heaps
 		/// Usage: SetDescriptorHeaps(mTextureHeap) or SetDescriptorHeaps(mTextureHeap, mOtherHeap, ...)
 		template <typename... Heaps>
-		void SetDescriptorHeaps(Heaps&... heaps)
+		void SetDescriptorHeaps(Heaps&&... heaps)
 		{
-			ID3D12DescriptorHeap* heapArray[] = {heaps.GetHeapPointer()...};
+			ID3D12DescriptorHeap* heapArray[] = {GetHeapPointer(std::forward<Heaps>(heaps))...};
 			mCommandList->SetDescriptorHeaps(static_cast<UINT>(sizeof...(heaps)), heapArray);
 		}
 
@@ -93,6 +93,14 @@ namespace Graphics
 		D3D12_COMMAND_LIST_TYPE GetType() const { return mType; }
 		ID3D12RootSignature* GetRootSignature() const { return mRootSignature.Get(); }
 		ID3D12PipelineState* GetPipelineState() const { return mPipelineState.Get(); }
+
+	private:
+		template <typename T>
+		auto GetHeapPointer(T& heap) -> decltype(heap.GetHeapPointer())
+		{
+			return heap.GetHeapPointer();
+		}
+		static ID3D12DescriptorHeap* GetHeapPointer(ID3D12DescriptorHeap* heap) { return heap; }
 
 	protected:
 		D3D12_COMMAND_LIST_TYPE mType = D3D12_COMMAND_LIST_TYPE_DIRECT;

@@ -1,9 +1,32 @@
 #include "ColorBuffer.h"
 #include "Core.h"
+#include "CommandListManager.h"
 #include <d3dx12/d3dx12.h>
 #include <cassert>
 
-ColorBuffer::ColorBuffer() = default;
+ColorBuffer::ColorBuffer()
+{
+	mSrvAllocation.Reset();
+	mUavAllocation.Reset();
+}
+
+ColorBuffer::~ColorBuffer()
+{
+	uint64_t lastSignaledFence =
+		Graphics::gCommandListManager->GetGraphicsQueue().GetLastSignaledFenceValue();
+
+	if (mSrvAllocation.IsValid())
+	{
+		Graphics::gBindlessAllocator->FreeDeferred(mSrvAllocation, lastSignaledFence);
+		mSrvAllocation.Reset();
+	}
+
+	if (mUavAllocation.IsValid())
+	{
+		Graphics::gBindlessAllocator->FreeDeferred(mUavAllocation, lastSignaledFence);
+		mUavAllocation.Reset();
+	}
+}
 
 void ColorBuffer::Create(const wchar_t* name, uint32_t width, uint32_t height, uint32_t arraySize,
 						 DXGI_FORMAT format, bool allowUAV)
@@ -31,20 +54,16 @@ void ColorBuffer::Create(const wchar_t* name, uint32_t width, uint32_t height, u
 
 	D3D12_CLEAR_VALUE clearValue = {};
 	clearValue.Format = format;
-	clearValue.Color[0] = 0.0f;
-	clearValue.Color[1] = 0.0f;
-	clearValue.Color[2] = 0.0f;
-	clearValue.Color[3] = 1.0f;
+	clearValue.Color[0] = 0.0F;
+	clearValue.Color[1] = 0.0F;
+	clearValue.Color[2] = 0.0F;
+	clearValue.Color[3] = 1.0F;
 
 	CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
 
-	HRESULT hr = Graphics::gDevice->CreateCommittedResource(
-		&heapProps,
-		D3D12_HEAP_FLAG_NONE,
-		&desc,
-		D3D12_RESOURCE_STATE_RENDER_TARGET,
-		&clearValue,
-		IID_PPV_ARGS(&mResource));
+	HRESULT hr = Graphics::gDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+															D3D12_RESOURCE_STATE_RENDER_TARGET,
+															&clearValue, IID_PPV_ARGS(&mResource));
 
 	assert(SUCCEEDED(hr) && "Failed to create color buffer");
 
@@ -104,7 +123,25 @@ void ColorBuffer::CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE srvHandle)
 	srvDesc.Texture2D.MipLevels = 1;
 	srvDesc.Texture2D.MostDetailedMip = 0;
 
-	Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, srvHandle);
+	// If we actually get a valid paramter, it is probably the UI system or something else
+	if (srvHandle.ptr != 0)
+	{
+		Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, srvHandle);
+	}
+	else
+	{
+		// Carry on with bindless
+		mSrvAllocation = Graphics::gBindlessAllocator->Allocate(1);
+		if (!mSrvAllocation.IsValid())
+		{
+			return;
+		}
+
+		DescriptorHandle handle =
+			Graphics::gBindlessAllocator->GetHandle(mSrvAllocation.mStartIndex);
+		Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc,
+													handle.GetCpuHandle());
+	}
 }
 
 void ColorBuffer::CreateUAV(D3D12_CPU_DESCRIPTOR_HANDLE uavHandle)
@@ -112,13 +149,22 @@ void ColorBuffer::CreateUAV(D3D12_CPU_DESCRIPTOR_HANDLE uavHandle)
 	assert(Graphics::gDevice != nullptr);
 	assert(mResource != nullptr);
 
+	mUavAllocation = Graphics::gBindlessAllocator->Allocate(1);
+	if (!mUavAllocation.IsValid())
+	{
+		return;
+	}
+
+	DescriptorHandle handle = Graphics::gBindlessAllocator->GetHandle(mUavAllocation.mStartIndex);
+
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 	uavDesc.Format = mFormat;
 	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 	uavDesc.Texture2D.MipSlice = 0;
 	uavDesc.Texture2D.PlaneSlice = 0;
 
-	Graphics::gDevice->CreateUnorderedAccessView(mResource.Get(), nullptr, &uavDesc, uavHandle);
+	Graphics::gDevice->CreateUnorderedAccessView(mResource.Get(), nullptr, &uavDesc,
+												 handle.GetCpuHandle());
 
-	mUav = DescriptorHandle(uavHandle, {0});
+	mUav = DescriptorHandle(handle.GetCpuHandle(), {0});
 }

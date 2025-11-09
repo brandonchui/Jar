@@ -56,13 +56,28 @@ namespace SlangHelper
 		sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
 
 		// Compiling options, mainly just setting it to high.
+#ifdef ENABLE_BINDLESS
+		std::array<slang::CompilerOptionEntry, 2> optionEntries;
+#else
 		std::array<slang::CompilerOptionEntry, 1> optionEntries;
+#endif
 		optionEntries[0].name = slang::CompilerOptionName::Optimization;
 		optionEntries[0].value.kind = slang::CompilerOptionValueKind::Int;
 		optionEntries[0].value.intValue0 = SLANG_OPTIMIZATION_LEVEL_HIGH;
 
+#ifdef ENABLE_BINDLESS
+		// Pass ENABLE_BINDLESS macro to shader compiler
+		optionEntries[1].name = slang::CompilerOptionName::MacroDefine;
+		optionEntries[1].value.kind = slang::CompilerOptionValueKind::String;
+		optionEntries[1].value.stringValue0 = "ENABLE_BINDLESS";
+		optionEntries[1].value.stringValue1 = "1";
+
+		sessionDesc.compilerOptionEntries = optionEntries.data();
+		sessionDesc.compilerOptionEntryCount = 2;
+#else
 		sessionDesc.compilerOptionEntries = optionEntries.data();
 		sessionDesc.compilerOptionEntryCount = 1;
+#endif
 
 		Slang::ComPtr<slang::ISession> session;
 		if (SLANG_FAILED(globalSession->createSession(sessionDesc, session.writeRef())))
@@ -350,6 +365,7 @@ namespace SlangHelper
 		if (device && layout)
 		{
 			RootSignatureBuilder builder(layout, device);
+			builder.SetBindlessMode(true);
 			if (SUCCEEDED(builder.Build()))
 			{
 				result.rootSignature = builder.GetRootSignature();

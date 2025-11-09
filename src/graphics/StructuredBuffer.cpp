@@ -3,6 +3,7 @@
 #include "CommandContext.h"
 #include "CommandListManager.h"
 #include "UploadBuffer.h"
+#include "DescriptorHeap.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include <d3dx12/d3dx12.h>
 
@@ -120,13 +121,22 @@ namespace Graphics
 		queue.WaitForFence(fenceValue);
 	}
 
-	void StructuredBuffer::CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle) const
+	void StructuredBuffer::CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle)
 	{
 		if (!mResource)
 		{
 			sLogger->error("Can't create SRV because buffer not created");
 			return;
 		}
+
+		mSrvAllocation = gBindlessAllocator->Allocate(1);
+		if (!mSrvAllocation.IsValid())
+		{
+			sLogger->error("Failed to allocate SRV descriptor from bindless heap");
+			return;
+		}
+
+		DescriptorHandle handle = gBindlessAllocator->GetHandle(mSrvAllocation.mStartIndex);
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -137,7 +147,7 @@ namespace Graphics
 		srvDesc.Buffer.StructureByteStride = mElementSize;
 		srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
-		gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, cpuHandle);
+		gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, handle.GetCpuHandle());
 
 		sLogger->debug("Created SRV for {} elements of {} bytes", mElementCount, mElementSize);
 	}
@@ -157,6 +167,15 @@ namespace Graphics
 			return;
 		}
 
+		mUavAllocation = gBindlessAllocator->Allocate(1);
+		if (!mUavAllocation.IsValid())
+		{
+			sLogger->error("Failed to allocate UAV descriptor from bindless heap");
+			return;
+		}
+
+		DescriptorHandle handle = gBindlessAllocator->GetHandle(mUavAllocation.mStartIndex);
+
 		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 		uavDesc.Format = DXGI_FORMAT_UNKNOWN;
 		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
@@ -166,7 +185,7 @@ namespace Graphics
 		uavDesc.Buffer.CounterOffsetInBytes = 0;
 		uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
 
-		gDevice->CreateUnorderedAccessView(mResource.Get(), nullptr, &uavDesc, cpuHandle);
+		gDevice->CreateUnorderedAccessView(mResource.Get(), nullptr, &uavDesc, handle.GetCpuHandle());
 
 		sLogger->debug("Created UAV for {} elements of {} bytes", mElementCount, mElementSize);
 	}

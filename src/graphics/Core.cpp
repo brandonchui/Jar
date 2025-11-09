@@ -1,4 +1,5 @@
 #include "Core.h"
+#include "d3d12.h"
 #include "d3d12sdklayers.h"
 #include "d3dcommon.h"
 #include "DescriptorHeap.h"
@@ -29,6 +30,9 @@ namespace Graphics
 
 	// Global descriptor allocators for each heap type
 	DescriptorAllocator* gDescriptorAllocator[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES] = {};
+
+	// Global Bindless Allocator
+	BindlessAllocator* gBindlessAllocator = nullptr;
 
 	// Global command list management
 	CommandListManager* gCommandListManager = nullptr;
@@ -491,6 +495,11 @@ void Graphics::Init()
 		return;
 
 	InitializeDescriptorAllocators();
+
+	// Bindless
+	gBindlessAllocator = new BindlessAllocator();
+	gBindlessAllocator->Initialize(1000000, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
 	InitializeCommandSystem();
 
 	gShaderCache = new ShaderCache();
@@ -535,6 +544,13 @@ void Graphics::Shutdown()
 		i = nullptr;
 	}
 	DescriptorAllocator::DestroyAll();
+
+	if (gBindlessAllocator)
+	{
+		gBindlessAllocator->Shutdown();
+		delete gBindlessAllocator;
+		gBindlessAllocator = nullptr;
+	}
 
 	if (gAllocator != nullptr)
 	{

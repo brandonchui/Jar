@@ -2,8 +2,10 @@
 #include "Core.h"
 #include "CommandContext.h"
 #include "CommandListManager.h"
+#include "DescriptorHeap.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include <DDSTextureLoader.h>
+#include <cstdint>
 #include <d3dx12/d3dx12.h>
 #include <vector>
 
@@ -28,12 +30,19 @@ Texture::Texture()
 , mHeight(0)
 , mMipLevels(1)
 {
-	//consturctor
+	mSrvAllocation.Reset();
 }
 
 Texture::~Texture()
 {
-	//TODO
+	if (mSrvAllocation.IsValid())
+	{
+		uint64_t lastSignaledFence =
+			Graphics::gCommandListManager->GetGraphicsQueue().GetLastSignaledFenceValue();
+		Graphics::gBindlessAllocator->FreeDeferred(mSrvAllocation, lastSignaledFence);
+
+		mSrvAllocation.Reset();
+	}
 }
 
 bool Texture::LoadFromFile(const std::wstring& filepath)
@@ -55,6 +64,9 @@ bool Texture::LoadFromFile(const std::wstring& filepath)
 	{
 		sLogger->error("Failed to load DDS file. HRESULT: 0x{:08X}", static_cast<unsigned int>(hr));
 		mDeferredUploadData.reset();
+
+		mSrvAllocation.Reset();
+
 		return false;
 	}
 
@@ -74,8 +86,19 @@ bool Texture::LoadFromFile(const std::wstring& filepath)
 	return true;
 }
 
-void Texture::CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle) const
+void Texture::CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle)
 {
+	mSrvAllocation = Graphics::gBindlessAllocator->Allocate(1);
+	if (!mSrvAllocation.IsValid())
+	{
+		sLogger->error("Failed to allocate SRV descriptor from bindless heap");
+		return;
+	}
+
+	DescriptorHandle handle = Graphics::gBindlessAllocator->GetHandle(mSrvAllocation.mStartIndex);
+
+	SetSRVHandles(handle.GetCpuHandle(), handle.GetGpuHandle());
+
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Format = mFormat;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -85,7 +108,9 @@ void Texture::CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle) const
 	srvDesc.Texture2D.PlaneSlice = 0;
 	srvDesc.Texture2D.ResourceMinLODClamp = 0.0F;
 
-	Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, cpuHandle);
+	// Deprecated, moving to Bindless
+	// Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, cpuHandle);
+	Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, handle.GetCpuHandle());
 }
 
 void Texture::SetSRVHandles(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
