@@ -1,5 +1,7 @@
+module BlurHorizontal;
+
 #ifdef ENABLE_BINDLESS
-#include "BindlessHelpers.slang"
+import common;
 #endif
 
 cbuffer BlurParams : register(b0)

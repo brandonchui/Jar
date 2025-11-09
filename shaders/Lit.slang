@@ -1,4 +1,6 @@
-#include "PBR.slang"
+module Lit;
+
+import common;
 
 struct Transform
 {

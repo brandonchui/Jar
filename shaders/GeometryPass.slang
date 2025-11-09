@@ -1,5 +1,7 @@
+module GeometryPass;
+
 #ifdef ENABLE_BINDLESS
-#include "BindlessHelpers.slang"
+import common;
 #endif
 
 struct Transform
