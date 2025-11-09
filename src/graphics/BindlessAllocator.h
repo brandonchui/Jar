@@ -56,6 +56,7 @@ public:
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandleStart() const { return mGpuStart; }
 
 	ID3D12DescriptorHeap* GetHeap() const { return mHeap.Get(); }
+	ID3D12DescriptorHeap* GetHeapPointer() const { return mHeap.Get(); }
 	uint32_t GetHeapSize() const { return mHeapCount; }
 	uint32_t GetDescriptorSize() const { return mDescriptorSize; }
 

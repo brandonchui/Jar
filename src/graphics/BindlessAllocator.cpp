@@ -93,7 +93,7 @@ Allocation BindlessAllocator::Allocate(uint32_t count)
 {
 	Allocation res = {};
 
-	if (mFreeList.contains(count))
+	if (mFreeList.contains(count) && !mFreeList.at(count).empty())
 	{
 		// Free list contains available _count_ of descriptors. Use the value pair to get start.
 		res.mCount = count;
@@ -139,7 +139,7 @@ bool BindlessAllocator::Free(Allocation allocation)
 		mGenerations[i]++;
 	}
 
-	sLogger->info("Freed {} descriptors at index {}", allocation.mCount, allocation.mStartIndex);
+	// sLogger->info("Freed {} descriptors at index {}", allocation.mCount, allocation.mStartIndex);
 
 	return true;
 }
@@ -160,7 +160,7 @@ DescriptorHandle BindlessAllocator::GetHandle(uint32_t index)
 void BindlessAllocator::FreeDeferred(Allocation allocation, uint64_t fence)
 {
 	mPendingDeletion.push({.mAllocation = allocation, .mFence = fence});
-	sLogger->info("Deferred Deletionf for allocation at fence {}", fence);
+	// sLogger->info("Deferred Deletionf for allocation at fence {}", fence);
 }
 
 void BindlessAllocator::ProcessDeletions(uint64_t completedFence)
