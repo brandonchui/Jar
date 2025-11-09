@@ -6,6 +6,7 @@
 #include <spdlog/spdlog.h>
 #include <d3d12.h>
 
+// NOTE Why is this in namespace?
 namespace Graphics
 {
 	/// Array of typed structs that are accessible by shaders. For

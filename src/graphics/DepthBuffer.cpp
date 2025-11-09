@@ -94,14 +94,6 @@ void DepthBuffer::CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE srvHandle)
 {
 	assert(mResource != nullptr);
 
-	mSrvAllocation = Graphics::gBindlessAllocator->Allocate(1);
-	if (!mSrvAllocation.IsValid())
-	{
-		return;
-	}
-
-	DescriptorHandle handle = Graphics::gBindlessAllocator->GetHandle(mSrvAllocation.mStartIndex);
-
 	DXGI_FORMAT srvFormat = DXGI_FORMAT_UNKNOWN;
 	if (mFormat == DXGI_FORMAT_D32_FLOAT)
 	{
@@ -123,7 +115,25 @@ void DepthBuffer::CreateSRV(D3D12_CPU_DESCRIPTOR_HANDLE srvHandle)
 	srvDesc.Texture2D.PlaneSlice = 0;
 	srvDesc.Texture2D.ResourceMinLODClamp = 0.0F;
 
-	Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, handle.GetCpuHandle());
+	// If we actually get a valid paramter, it is probably the UI system or something else
+	if (srvHandle.ptr != 0)
+	{
+		Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc, srvHandle);
+	}
+	else
+	{
+		// Carry on with bindless
+		mSrvAllocation = Graphics::gBindlessAllocator->Allocate(1);
+		if (!mSrvAllocation.IsValid())
+		{
+			return;
+		}
+
+		DescriptorHandle handle =
+			Graphics::gBindlessAllocator->GetHandle(mSrvAllocation.mStartIndex);
+		Graphics::gDevice->CreateShaderResourceView(mResource.Get(), &srvDesc,
+													handle.GetCpuHandle());
+	}
 }
 
 void DepthBuffer::Clear(Graphics::GraphicsContext& context, float depth)
