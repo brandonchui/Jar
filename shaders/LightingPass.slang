@@ -1,7 +1,6 @@
-#ifdef ENABLE_BINDLESS
-#include "BindlessHelpers.slang"
-#endif
-#include "PBR.slang"
+module LightingPass;
+
+import common;
 
 struct SpotLight
 {

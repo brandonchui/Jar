@@ -1,5 +1,7 @@
+module BlurVertical;
+
 #ifdef ENABLE_BINDLESS
-#include "BindlessHelpers.slang"
+import common;
 #endif
 
 cbuffer BlurParams : register(b0)
@@ -13,6 +15,7 @@ struct ComputeResources
 	Texture2D.Handle inputTexture;
 	RWTexture2DHandle outputTexture;
 };
+
 ConstantBuffer<ComputeResources> g_resources : register(b1);
 
 #define INPUT_TEXTURE g_resources.inputTexture

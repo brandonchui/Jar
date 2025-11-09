@@ -46,6 +46,18 @@ namespace SlangHelper
 		// Slang sessions are just scoped cache.
 		slang::SessionDesc sessionDesc = {};
 
+		// Add search paths for shader includes.
+		// NOTE Probably will need to update more search paths:
+		//     - /utils/
+		//     - /ibl/
+		std::filesystem::path shaderDir = shaderPath.parent_path();
+		std::filesystem::path commonDir = shaderDir / "common";
+		std::string shaderDirStr = shaderDir.string();
+		std::string commonDirStr = commonDir.string();
+		std::array<const char*, 2> searchPaths = {{shaderDirStr.c_str(), commonDirStr.c_str()}};
+		sessionDesc.searchPaths = searchPaths.data();
+		sessionDesc.searchPathCount = 2;
+
 		slang::TargetDesc targetDesc = {};
 		targetDesc.format = SLANG_DXIL;
 		// FIX Would like 6.8 shading model soon.

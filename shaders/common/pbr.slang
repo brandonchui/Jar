@@ -1,11 +1,15 @@
-static const float PI = 3.14159265359;
+// PBR functions for the common module
 
-float3 fresnelSchlick(float cosTheta, float3 F0)
+implementing common;
+
+public static const float PI = 3.14159265359;
+
+public float3 fresnelSchlick(float cosTheta, float3 F0)
 {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-float distributionGGX(float3 N, float3 H, float roughness)
+public float distributionGGX(float3 N, float3 H, float roughness)
 {
     float a = roughness * roughness;
     float a2 = a * a;
@@ -19,7 +23,7 @@ float distributionGGX(float3 N, float3 H, float roughness)
     return nom / max(denom, 0.0001);
 }
 
-float geometrySchlickGGX(float NdotV, float roughness)
+public float geometrySchlickGGX(float NdotV, float roughness)
 {
     float r = roughness + 1.0;
     float k = (r * r) / 8.0;
@@ -30,7 +34,7 @@ float geometrySchlickGGX(float NdotV, float roughness)
     return nom / max(denom, 0.0001);
 }
 
-float geometrySmith(float3 N, float3 V, float3 L, float roughness)
+public float geometrySmith(float3 N, float3 V, float3 L, float roughness)
 {
     float NdotV = max(dot(N, V), 0.0);
     float NdotL = max(dot(N, L), 0.0);
@@ -41,15 +45,15 @@ float geometrySmith(float3 N, float3 V, float3 L, float roughness)
 }
 
 // Cook Torrance BRDF
-void pbrBRDF(
-    float3 N,          
-    float3 V,           
-    float3 L,          
-    float3 albedo,      
-    float metallic,     
-    float roughness,    
+public void pbrBRDF(
+    float3 N,
+    float3 V,
+    float3 L,
+    float3 albedo,
+    float metallic,
+    float roughness,
     out float3 diffuse,
-    out float3 specular 
+    out float3 specular
 )
 {
     float3 H = normalize(V + L);
@@ -76,18 +80,17 @@ void pbrBRDF(
     kD *= (1.0 - metallic);
 
     diffuse = (kD * albedo) / PI;
-
 }
 
-// TODO Is there a better way?
-float3 evaluatePBR(
+// Convenience function for evaluating PBR with radiance
+public float3 evaluatePBR(
     float3 N,
     float3 V,
     float3 L,
     float3 albedo,
     float metallic,
     float roughness,
-    float3 radiance 
+    float3 radiance
 )
 {
     float3 diffuse, specular;
