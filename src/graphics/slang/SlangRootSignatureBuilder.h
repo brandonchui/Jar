@@ -35,6 +35,11 @@ namespace SlangHelper
 
 		ID3D12RootSignature* GetRootSignature() const { return mRootSignature.Get(); }
 
+		/// Sets whether to use bindless mode on. Will be off by defauilt but most likely
+		/// will leave it on for the app.
+		void SetBindlessMode(bool isBindless = false) { mIsBindless = isBindless; }
+		bool IsBindlessModeEnabled() const { return mIsBindless; }
+
 	private:
 		/// Information about a resource binding from reflection
 		struct ResourceBinding
@@ -77,6 +82,8 @@ namespace SlangHelper
 		Microsoft::WRL::ComPtr<ID3D12RootSignature> mRootSignature;
 
 		uint32_t mTotalDwordCost = 0;
+
+		bool mIsBindless;
 	};
 
 #endif // HAS_SLANG

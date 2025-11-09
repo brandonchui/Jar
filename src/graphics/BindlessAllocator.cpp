@@ -1,6 +1,7 @@
 #include "BindlessAllocator.h"
 #include "Core.h"
 #include "directx/d3d12.h"
+#include <cstddef>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 std::shared_ptr<spdlog::logger> BindlessAllocator::sLogger = nullptr;
@@ -58,6 +59,12 @@ bool BindlessAllocator::Initialize(uint32_t numDescriptors,
 
 	mHeapCount = numDescriptors;
 	mNextFreeIndex = 0;
+
+	// Reserve the first  5 indices dedicated to nulls
+	Allocation nullReservations = Allocate(5);
+	assert(nullReservations.mStartIndex == 0);
+	assert(mNextFreeIndex == 5);
+	CreateNullDescriptors();
 
 	return true;
 }
@@ -187,4 +194,70 @@ bool BindlessAllocator::IsValid(const Allocation& allocation) const
 	}
 
 	return mGenerations[allocation.mStartIndex] == allocation.mGeneration;
+}
+
+void BindlessAllocator::CreateNullDescriptors()
+{
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+
+	// Index 0 : Null Texture2D
+	srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.MostDetailedMip = 0;
+	Graphics::gDevice->CreateShaderResourceView(
+		nullptr, &srvDesc, GetHandle(NullDescriptor::Texture2D).GetCpuHandle());
+
+	// Index 1 : Null Texture3D
+	srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Texture3D.MipLevels = 1;
+	srvDesc.Texture3D.MostDetailedMip = 0;
+	Graphics::gDevice->CreateShaderResourceView(
+		nullptr, &srvDesc, GetHandle(NullDescriptor::Texture3D).GetCpuHandle());
+
+	// Index 2 : Null TextureCube
+	srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.TextureCube.MipLevels = 1;
+	srvDesc.TextureCube.MostDetailedMip = 0;
+	Graphics::gDevice->CreateShaderResourceView(
+		nullptr, &srvDesc, GetHandle(NullDescriptor::TextureCube).GetCpuHandle());
+
+	// Index 3 : Null Buffer
+	srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.NumElements = 1;
+	srvDesc.Buffer.StructureByteStride = 0;
+	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+	Graphics::gDevice->CreateShaderResourceView(nullptr, &srvDesc,
+												GetHandle(NullDescriptor::Buffer).GetCpuHandle());
+
+	// Index 4 : Null StructuredBuffer
+	srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.NumElements = 1;
+	srvDesc.Buffer.StructureByteStride = 4;
+	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+	Graphics::gDevice->CreateShaderResourceView(
+		nullptr, &srvDesc, GetHandle(NullDescriptor::StructuredBuffer).GetCpuHandle());
+
+	sLogger->info("Created null descriptors at indices 0-4");
+}
+
+uint32_t BindlessAllocator::GetNullDescriptorIndex(NullDescriptor kind) const
+{
+	return static_cast<uint32_t>(kind);
 }

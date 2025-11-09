@@ -29,6 +29,16 @@ struct PendingDeletion
 	uint64_t mFence;
 };
 
+/// Indices 0 - 4
+enum NullDescriptor
+{
+	Texture2D,
+	Texture3D,
+	TextureCube,
+	Buffer,
+	StructuredBuffer,
+};
+
 class DescriptorHandle;
 
 class BindlessAllocator
@@ -62,7 +72,12 @@ public:
 
 	bool IsValid(const Allocation& allocation) const;
 
+	/// Nulls
+	uint32_t GetNullDescriptorIndex(NullDescriptor kind) const;
+
 private:
+	void CreateNullDescriptors();
+
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mHeap;
 	D3D12_DESCRIPTOR_HEAP_TYPE mDescriptorType;
 
