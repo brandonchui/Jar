@@ -12,6 +12,7 @@
 namespace Graphics
 {
 	class GraphicsContext;
+	extern BindlessAllocator* gBindlessAllocator;
 }
 
 class Texture : public GpuResource
@@ -61,7 +62,12 @@ public:
 	void ClearUploadBuffer();
 
 	/// Bindless Allocation
-	uint32_t GetSRVIndex() const { return mSrvAllocation.mStartIndex; }
+	uint32_t GetSRVIndex() const
+	{
+		return mSrvAllocation.IsValid()
+			? mSrvAllocation.mStartIndex
+			: Graphics::gBindlessAllocator->GetNullDescriptorIndex(NullDescriptor::Texture2D);
+	}
 	bool HasSRV() const { return mSrvAllocation.IsValid(); }
 
 private:

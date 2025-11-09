@@ -4,6 +4,11 @@
 #include "DescriptorHeap.h"
 #include "BindlessAllocator.h"
 
+namespace Graphics
+{
+	extern BindlessAllocator* gBindlessAllocator;
+}
+
 /// Color render target with RTV support for pixel shader outputs.
 /// The ColorBuffer holds additional render target variables while
 /// the PixelBuffer just holds width, height, format
@@ -33,8 +38,18 @@ public:
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const { return mRtv; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const { return mUav.GetCpuHandle(); }
 
-	uint32_t GetSRVIndex() const { return mSrvAllocation.mStartIndex; }
-	uint32_t GetUAVIndex() const { return mUavAllocation.mStartIndex; }
+	uint32_t GetSRVIndex() const
+	{
+		return mSrvAllocation.IsValid()
+			? mSrvAllocation.mStartIndex
+			: Graphics::gBindlessAllocator->GetNullDescriptorIndex(NullDescriptor::Texture2D);
+	}
+	uint32_t GetUAVIndex() const
+	{
+		return mUavAllocation.IsValid()
+			? mUavAllocation.mStartIndex
+			: Graphics::gBindlessAllocator->GetNullDescriptorIndex(NullDescriptor::Texture2D);
+	}
 	bool HasSRV() const { return mSrvAllocation.IsValid(); }
 	bool HasUAV() const { return mUavAllocation.IsValid(); }
 

@@ -4,6 +4,11 @@
 #include "BindlessAllocator.h"
 #include <d3d12.h>
 
+namespace Graphics
+{
+	extern BindlessAllocator* gBindlessAllocator;
+}
+
 /// A Gpu side wrapper around GpuResource for geometry
 /// view/descriptors. Tells the GPU how to interpret
 /// the data.
@@ -29,8 +34,18 @@ public:
 	D3D12_INDEX_BUFFER_VIEW IndexBufferView(DXGI_FORMAT format = DXGI_FORMAT_R32_UINT) const;
 
 	/// Bindless Allocation
-	uint32_t GetSRVIndex() const { return mSrvAllocation.mStartIndex; }
-	uint32_t GetUAVIndex() const { return mUavAllocation.mStartIndex; }
+	uint32_t GetSRVIndex() const
+	{
+		return mSrvAllocation.IsValid()
+			? mSrvAllocation.mStartIndex
+			: Graphics::gBindlessAllocator->GetNullDescriptorIndex(NullDescriptor::Buffer);
+	}
+	uint32_t GetUAVIndex() const
+	{
+		return mUavAllocation.IsValid()
+			? mUavAllocation.mStartIndex
+			: Graphics::gBindlessAllocator->GetNullDescriptorIndex(NullDescriptor::Buffer);
+	}
 	bool HasSRV() const { return mSrvAllocation.IsValid(); }
 	bool HasUAV() const { return mUavAllocation.IsValid(); }
 

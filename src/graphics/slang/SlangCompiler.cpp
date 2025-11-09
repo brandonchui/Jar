@@ -350,6 +350,7 @@ namespace SlangHelper
 		if (device && layout)
 		{
 			RootSignatureBuilder builder(layout, device);
+			builder.SetBindlessMode(true);
 			if (SUCCEEDED(builder.Build()))
 			{
 				result.rootSignature = builder.GetRootSignature();

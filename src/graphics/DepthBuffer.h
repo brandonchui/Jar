@@ -7,6 +7,7 @@
 namespace Graphics
 {
 	class GraphicsContext;
+	extern BindlessAllocator* gBindlessAllocator;
 }
 
 /// Creates a Depth Buffer with some standard start up settings
@@ -30,7 +31,12 @@ public:
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV() const { return mDSV; }
 
-	uint32_t GetSRVIndex() const { return mSrvAllocation.mStartIndex; }
+	uint32_t GetSRVIndex() const
+	{
+		return mSrvAllocation.IsValid()
+			? mSrvAllocation.mStartIndex
+			: Graphics::gBindlessAllocator->GetNullDescriptorIndex(NullDescriptor::Texture2D);
+	}
 	bool HasSRV() const { return mSrvAllocation.IsValid(); }
 
 	/// Clears the depth target
