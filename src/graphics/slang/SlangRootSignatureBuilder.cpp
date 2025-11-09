@@ -383,7 +383,7 @@ namespace SlangHelper
 			{
 				if (binding.hasOnlyUniforms && binding.sizeBytes > 0)
 				{
-					if (binding.sizeBytes <= 16)
+					if (binding.sizeBytes <= 64)
 					{
 						// ROOT CONSTANTS
 						D3D12_ROOT_PARAMETER param = {};
@@ -533,11 +533,12 @@ namespace SlangHelper
 
 		// Enabling more flags if we enabling bindless, see:
 		// https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_root_signature_flags
-		if (mIsBindless)
-		{
-			flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
-			flags |= D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
-		}
+		// if (mIsBindless)
+		// {
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
+		// }
+
 		rootSigDesc.Flags = flags;
 
 		Microsoft::WRL::ComPtr<ID3DBlob> signature;
