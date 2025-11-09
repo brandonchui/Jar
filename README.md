@@ -92,6 +92,7 @@ These are the major features that have higher priority and will get more develop
 |---------|:------:|
 | Compute Shaders | ⚠️ |
 | Slang Integration | ⚠️ |
+| Bindless | ✅ |
 | Deferred rendering | ✅ |
 | Image based lighting | ❌ |
 | Cluster rendering | ❌ |
