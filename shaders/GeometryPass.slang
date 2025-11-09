@@ -1,3 +1,7 @@
+#ifdef ENABLE_BINDLESS
+#include "BindlessHelpers.slang"
+#endif
+
 struct Transform
 {
     float4x4 wvp;
@@ -30,10 +34,35 @@ cbuffer MaterialCB : register(b1)
     MaterialConstants material;
 }
 
+#ifdef ENABLE_BINDLESS
+struct MaterialResources
+{
+    Texture2D.Handle albedoTexture;
+    Texture2D.Handle normalTexture;
+    Texture2D.Handle metallicTexture;
+    Texture2D.Handle roughnessTexture;
+};
+
+ConstantBuffer<MaterialResources> g_resources : register(b2);
+
+#define ALBEDO_TEXTURE g_resources.albedoTexture
+#define NORMAL_TEXTURE g_resources.normalTexture
+#define METALLIC_TEXTURE g_resources.metallicTexture
+#define ROUGHNESS_TEXTURE g_resources.roughnessTexture
+
+#else
 Texture2D albedoTexture : register(t0);
 Texture2D normalTexture : register(t1);
 Texture2D metallicTexture : register(t2);
 Texture2D roughnessTexture : register(t3);
+
+#define ALBEDO_TEXTURE albedoTexture
+#define NORMAL_TEXTURE normalTexture
+#define METALLIC_TEXTURE metallicTexture
+#define ROUGHNESS_TEXTURE roughnessTexture
+
+#endif
+
 SamplerState textureSampler : register(s0);
 
 struct VertexInput {
@@ -89,24 +118,24 @@ PSOutput fragmentMain(VertexOutput input)
 {
     PSOutput output;
 
-    float4 albedo = albedoTexture.Sample(textureSampler, input.texCoord);
+    float4 albedo = ALBEDO_TEXTURE.Sample(textureSampler, input.texCoord);
     albedo *= material.albedoColor;
 
     float metallic = material.metallicFactor;
     if (material.hasMetallicTexture != 0) {
-        float4 metallicSample = metallicTexture.Sample(textureSampler, input.texCoord);
+        float4 metallicSample = METALLIC_TEXTURE.Sample(textureSampler, input.texCoord);
         metallic *= max(max(metallicSample.r, metallicSample.g), metallicSample.b);
     }
 
     float roughness = material.roughnessFactor;
     if (material.hasRoughnessTexture != 0)
-        roughness *= roughnessTexture.Sample(textureSampler, input.texCoord).r;
+        roughness *= ROUGHNESS_TEXTURE.Sample(textureSampler, input.texCoord).r;
 
     float ao = material.ambientOcclusionStrength;
 
     float3 normal = normalize(input.normal);
     if (material.hasNormalTexture != 0 && material.normalStrength > 0.0) {
-        float3 normalMapSample = normalTexture.Sample(textureSampler, input.texCoord).rgb;
+        float3 normalMapSample = NORMAL_TEXTURE.Sample(textureSampler, input.texCoord).rgb;
         float3 tangentNormal = normalMapSample * 2.0 - 1.0;
         tangentNormal.xy *= material.normalStrength;
         tangentNormal = normalize(tangentNormal);

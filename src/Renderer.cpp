@@ -355,11 +355,9 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 	}
 
 	context.SetDescriptorHeaps(bindlessHeap, samplerHeap);
-
-	context.SetShaderMRT("GeometryPassBindless", rtFormats.data(), 4, DXGI_FORMAT_D32_FLOAT);
-#else
-	context.SetShaderMRT("GeometryPass", rtFormats, 4, DXGI_FORMAT_D32_FLOAT);
 #endif
+
+	context.SetShaderMRT("GeometryPass", rtFormats.data(), 4, DXGI_FORMAT_D32_FLOAT);
 
 	context.BindGraphicsPipeline();
 
@@ -567,14 +565,13 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 	mLightingUploadBuffer.Copy(&mLightingConstants, sizeof(LightingConstants), 0);
 
 #ifdef ENABLE_BINDLESS
-
 	context.SetDescriptorHeaps(Graphics::gBindlessAllocator->GetHeap(),
 							   mSamplerHeap.GetHeapPointer());
-	context.SetShader("LightingPassBindless");
 #else
 	context.SetDescriptorHeaps(mTextureHeap, mSamplerHeap);
-	context.SetShader("LightingPass");
 #endif
+
+	context.SetShader("LightingPass");
 
 	// NOTE This probably should be done automatically but for right now manually
 	// is fine.
@@ -662,11 +659,11 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 #ifdef ENABLE_BINDLESS
 	context.SetDescriptorHeaps(Graphics::gBindlessAllocator->GetHeap(),
 							   mSamplerHeap.GetHeapPointer());
-	context.SetComputeShader("BlurHorizontalBindless");
 #else
-	context.SetComputeShader("BlurHorizontal");
 	context.SetDescriptorHeaps(mTextureHeap);
 #endif
+
+	context.SetComputeShader("BlurHorizontal");
 	context.BindComputePipeline();
 
 	context.SetComputeConstants(0, 1, &mBlurIntensity);
@@ -713,10 +710,11 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 #ifdef ENABLE_BINDLESS
 	context.SetDescriptorHeaps(Graphics::gBindlessAllocator->GetHeap(),
 							   mSamplerHeap.GetHeapPointer());
-	context.SetComputeShader("BlurVerticalBindless");
 #else
-	context.SetComputeShader("BlurVertical");
+	context.SetDescriptorHeaps(mTextureHeap);
 #endif
+
+	context.SetComputeShader("BlurVertical");
 	context.BindComputePipeline();
 
 	context.SetComputeConstants(0, 1, &mBlurIntensity);

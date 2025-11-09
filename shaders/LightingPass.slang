@@ -1,12 +1,7 @@
+#ifdef ENABLE_BINDLESS
+#include "BindlessHelpers.slang"
+#endif
 #include "PBR.slang"
-
-// GBuffer inputs
-Texture2D gAlbedoAO : register(t0);
-Texture2D gNormalRoughness : register(t1);
-Texture2D gMetallicFlags : register(t2);
-Texture2D gEmissive : register(t3);
-Texture2D gDepth : register(t4);
-SamplerState gSampler : register(s0);
 
 struct SpotLight
 {
@@ -30,7 +25,44 @@ cbuffer LightingInfo : register(b0)
     float padding;
 };
 
+#ifdef ENABLE_BINDLESS
+struct GBufferResources
+{
+    Texture2D.Handle albedoAO;
+    Texture2D.Handle normalRoughness;
+    Texture2D.Handle metallicFlags;
+    Texture2D.Handle emissive;
+    Texture2D.Handle depth;
+    StructuredBufferHandle<SpotLight> spotLights;
+};
+
+ConstantBuffer<GBufferResources> g_gbuffer : register(b1);
+
+#define ALBEDO_AO_TEX g_gbuffer.albedoAO
+#define NORMAL_ROUGH_TEX g_gbuffer.normalRoughness
+#define METALLIC_FLAGS_TEX g_gbuffer.metallicFlags
+#define EMISSIVE_TEX g_gbuffer.emissive
+#define DEPTH_TEX g_gbuffer.depth
+#define SPOT_LIGHTS g_gbuffer.spotLights
+
+#else
+Texture2D gAlbedoAO : register(t0);
+Texture2D gNormalRoughness : register(t1);
+Texture2D gMetallicFlags : register(t2);
+Texture2D gEmissive : register(t3);
+Texture2D gDepth : register(t4);
 StructuredBuffer<SpotLight> spotLights : register(t1, space1);
+
+#define ALBEDO_AO_TEX gAlbedoAO
+#define NORMAL_ROUGH_TEX gNormalRoughness
+#define METALLIC_FLAGS_TEX gMetallicFlags
+#define EMISSIVE_TEX gEmissive
+#define DEPTH_TEX gDepth
+#define SPOT_LIGHTS spotLights
+
+#endif
+
+SamplerState gSampler : register(s0);
 
 struct VertexOutput {
     float4 position : SV_Position;
@@ -61,7 +93,7 @@ VertexOutput vertexMain(uint vertexID : SV_VertexID)
             output.texCoord = float2( 2.0,  0.0);
             break;
     }
- 
+
     return output;
 }
 
@@ -79,7 +111,6 @@ float3 createWorldPosition(float2 uv, float depth, float4x4 invViewProj)
     return worldPos.xyz;
 }
 
-// Using same function from Lit.slang when I had forward renderer
 void calculateSpotLight(SpotLight light, float3 worldPos, float3 normal, float3 viewDir,
                        float3 albedo, float metallic, float roughness,
                        out float3 diffuse, out float3 specular)
@@ -118,11 +149,11 @@ void calculateSpotLight(SpotLight light, float3 worldPos, float3 normal, float3 
 [shader("fragment")]
 float4 fragmentMain(VertexOutput input) : SV_Target
 {
-    float4 albedoAO = gAlbedoAO.Sample(gSampler, input.texCoord);
-    float4 normalRough = gNormalRoughness.Sample(gSampler, input.texCoord);
-    float4 metallicFlags = gMetallicFlags.Sample(gSampler, input.texCoord);
-    float4 emissive = gEmissive.Sample(gSampler, input.texCoord);
-    float depth = gDepth.Sample(gSampler, input.texCoord).r;
+    float4 albedoAO = ALBEDO_AO_TEX.Sample(gSampler, input.texCoord);
+    float4 normalRough = NORMAL_ROUGH_TEX.Sample(gSampler, input.texCoord);
+    float4 metallicFlags = METALLIC_FLAGS_TEX.Sample(gSampler, input.texCoord);
+    float4 emissive = EMISSIVE_TEX.Sample(gSampler, input.texCoord);
+    float depth = DEPTH_TEX.Sample(gSampler, input.texCoord).r;
 
     float3 albedo = albedoAO.rgb;
     float ao = albedoAO.a;
@@ -141,12 +172,11 @@ float4 fragmentMain(VertexOutput input) : SV_Target
     // Accumulate lights
     for (uint i = 0; i < numActiveLights; ++i) {
         float3 diffuse, specular;
-        calculateSpotLight(spotLights[i], worldPos, normal, viewDir, albedo, metallic, roughness, diffuse, specular);
+        calculateSpotLight(SPOT_LIGHTS[i], worldPos, normal, viewDir, albedo, metallic, roughness, diffuse, specular);
         finalColor += diffuse + specular;
     }
 
     finalColor = saturate(finalColor);
-
 
     return float4(finalColor, 1.0);
 }
