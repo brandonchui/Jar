@@ -200,6 +200,16 @@ endif()
 
 add_subdirectory(src)
 
+## Options
+option(ENABLE_BINDLESS "Enable bindless rendering (requires SM 6.6)" ON)
+if(ENABLE_BINDLESS )
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_BINDLESS )
+    message(STATUS "Bindless rendering: ENABLED")
+else()
+    message(STATUS "Bindless rendering: DISABLED")
+endif()
+
+
 ### Tests
 if(BUILD_TESTS)
     add_subdirectory(tests)
