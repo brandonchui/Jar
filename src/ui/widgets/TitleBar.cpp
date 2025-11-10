@@ -86,6 +86,15 @@ namespace UI
 				ImGui::EndMenu();
 			}
 
+			if (ImGui::BeginMenu("Edit"))
+			{
+				if (ImGui::MenuItem("Preferences..."))
+				{
+					state.action = TitleBarAction::OpenPreferences;
+				}
+				ImGui::EndMenu();
+			}
+
 			if (ImGui::BeginMenu("Help"))
 			{
 				if (ImGui::MenuItem("About"))

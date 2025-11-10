@@ -12,12 +12,17 @@
 
 #include "Renderer.h"
 #include "Scene.h"
+#include "Config.h"
 #include "ui/UISystem.h"
 #include "ui/widgets/Viewport.h"
 #include "ui/widgets/Outliner.h"
 #include "ui/widgets/TitleBar.h"
 #include "ui/widgets/Properties.h"
 #include "imgui.h"
+
+#ifdef _WIN32
+#include <shellapi.h>
+#endif
 
 App::App() = default;
 
@@ -31,9 +36,17 @@ bool App::Initialize()
 	mLogger = spdlog::stdout_color_mt("App");
 	mLogger->set_pattern("[%H:%M:%S] [%^%l%$] [%n] %v");
 
-	mWindow = SDL_CreateWindow(
-		WINDOW_TITLE, static_cast<int>(WINDOW_WIDTH), static_cast<int>(WINDOW_HEIGHT),
-		SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_BORDERLESS);
+	// Load configuration settings from AppData
+	mConfigManager = std::make_unique<ConfigManager>();
+	mConfigManager->Load();
+
+	const ConfigSettings& settings = mConfigManager->GetSettings();
+	mLogger->info("Using window size: {}x{}", settings.windowWidth, settings.windowHeight);
+
+	mWindow = SDL_CreateWindow(WINDOW_TITLE, static_cast<int>(settings.windowWidth),
+							   static_cast<int>(settings.windowHeight),
+							   SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+								   SDL_WINDOW_BORDERLESS);
 
 	if (mWindow == nullptr)
 	{
@@ -66,7 +79,7 @@ bool App::Initialize()
 	}
 
 	mSwapChain = std::make_unique<SwapChain>();
-	mSwapChain->Create(GetHwnd(), WINDOW_WIDTH, WINDOW_HEIGHT, Graphics::gDevice,
+	mSwapChain->Create(GetHwnd(), settings.windowWidth, settings.windowHeight, Graphics::gDevice,
 					   Graphics::gCommandListManager->GetCommandQueue());
 
 	// Initialize UI system FIRST (Dear ImGui)
@@ -82,7 +95,7 @@ bool App::Initialize()
 
 	mRenderer = std::make_unique<Renderer>();
 	mRenderer->Initialize(mUISystem.get());
-	mRenderer->SetViewport(WINDOW_WIDTH, WINDOW_HEIGHT);
+	mRenderer->SetViewport(settings.windowWidth, settings.windowHeight);
 
 	// NOTE This is a slang test for shader test code, due for removal.
 	// SlangHelper::Compile();  // Commented out during SlangHelper refactoring
@@ -124,6 +137,12 @@ bool App::Initialize()
 
 void App::Shutdown()
 {
+	// Config manager will capture the any settings changed
+	if (mConfigManager)
+	{
+		mConfigManager->Save();
+	}
+
 	if (Graphics::gCommandListManager)
 	{
 		CommandQueue& queue = Graphics::gCommandListManager->GetGraphicsQueue();
@@ -331,6 +350,14 @@ void App::Resize(uint32_t width, uint32_t height)
 		mSwapChain->Resize(width, height);
 
 		mRenderer->SetViewport(width, height);
+
+		// Update settings in memory to avoid slow IO
+		if (mConfigManager)
+		{
+			ConfigSettings& settings = mConfigManager->GetMutableSettings();
+			settings.windowWidth = width;
+			settings.windowHeight = height;
+		}
 	}
 }
 
@@ -345,6 +372,22 @@ void App::RenderUI()
 	if (titleBarState.action == UI::TitleBarAction::Close)
 	{
 		mRunning = false;
+	}
+	else if (titleBarState.action == UI::TitleBarAction::OpenPreferences)
+	{
+		if (mConfigManager)
+		{
+			std::filesystem::path settingsPath = mConfigManager->GetSettingsPath();
+#ifdef _WIN32
+			ShellExecuteW(nullptr, L"open", settingsPath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#else
+			// Linux/macOS support?
+#endif
+			if (mLogger)
+			{
+				mLogger->info("Opening preferences: {}", settingsPath.string());
+			}
+		}
 	}
 
 	/// Create dockspace below title bar (from the docking branch).

@@ -61,6 +61,9 @@ public:
 	bool IsRunning() const { return mRunning; }
 	SDL_Window* GetWindow() const { return mWindow; }
 
+	/// Get the config manager
+	class ConfigManager* GetConfigManager() const { return mConfigManager.get(); }
+
 private:
 	/// Renders all UI widgets - called by UISystem callback
 	void RenderUI();
@@ -81,6 +84,9 @@ private:
 
 	/// UI system for Dear ImGui integration
 	std::unique_ptr<class UISystem> mUISystem;
+
+	/// Configuration manager for loading/saving settings
+	std::unique_ptr<class ConfigManager> mConfigManager;
 
 	/// Logger for App messages
 	std::shared_ptr<spdlog::logger> mLogger;
@@ -116,9 +122,6 @@ private:
 	SDL_Cursor* mCursorNS = nullptr;
 
 	float mDpiScale;
-
-	inline static uint32_t WINDOW_WIDTH = 1280;
-	inline static uint32_t WINDOW_HEIGHT = 720;
 
 	static constexpr const char* WINDOW_TITLE = "Jar";
 	static constexpr float TITLE_BAR_HEIGHT = 32.0F;

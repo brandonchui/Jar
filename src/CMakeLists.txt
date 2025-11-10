@@ -2,6 +2,8 @@ add_executable(Jar
     main.cpp
     App.cpp
     App.h
+    Config.cpp
+    Config.h
     Renderer.cpp
     Renderer.h
     Mesh.cpp
@@ -125,15 +127,16 @@ target_include_directories(Jar PRIVATE
 
 ### Link Libraries
 target_link_libraries(Jar PRIVATE
-    SDL3::SDL3     
+    SDL3::SDL3
     D3D12MemoryAllocator
-    spdlog::spdlog 
-    imgui          
+    spdlog::spdlog
+    imgui
     nlohmann_json::nlohmann_json
     d3d12.lib
     dxgi.lib
     d3dcompiler.lib
     dxguid.lib
+    shell32.lib
 )
 
 ### Link vcpkg libraries

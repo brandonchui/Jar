@@ -9,7 +9,8 @@ namespace UI
 	enum class TitleBarAction
 	{
 		None,
-		Close
+		Close,
+		OpenPreferences
 	};
 
 	struct TitleBarState
