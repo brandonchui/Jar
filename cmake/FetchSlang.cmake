@@ -135,7 +135,7 @@ if(USE_SLANG)
             OUTPUT ${OUTPUT_FILE}
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/shaders"
             COMMAND slangc
-                -profile sm_6_6
+                -profile sm_6_8
                 -target hlsl
                 -o ${OUTPUT_FILE}
                 ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER_FILE}

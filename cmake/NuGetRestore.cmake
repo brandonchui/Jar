@@ -52,8 +52,6 @@ function(configure_agility_sdk target)
             "${AGILITY_SDK_PATH}/build/native/include"
         )
 
-        target_compile_definitions(${target} PRIVATE D3D12_SDK_VERSION=616)
-
         target_link_directories(${target} PRIVATE
             "${AGILITY_SDK_PATH}/build/native/bin/x64"
         )

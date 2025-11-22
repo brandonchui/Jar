@@ -30,6 +30,7 @@ if ($clean) {
 
 # Build the project
 if ($build -or $run) {
+    $totalStartTime = Get-Date
     Write-ColorOutput Cyan "Building Jar Renderer in $BuildType mode..."
 
     # Create build directory if it doesn't exist
@@ -86,23 +87,37 @@ if ($build -or $run) {
 
     Push-Location $BuildDir
 try {
-    # Build the cmake command with vcpkg toolchain if available
-    # Using Ninja generator with CL compiler, and export compile_commands.json
-    $testFlag = if ($tests) { "-DBUILD_TESTS=ON" } else { "" }
-    $cmakeCmd = "cmake .. -G `"Ninja`" -DCMAKE_BUILD_TYPE=$BuildType -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $testFlag $vcpkgToolchain"
-    Invoke-Expression $cmakeCmd
-    if ($LASTEXITCODE -ne 0) {
-        throw "CMake configuration failed"
+    $needsConfigure = -not (Test-Path "build.ninja")
+
+    if ($needsConfigure) {
+        Write-ColorOutput Yellow "Configuring CMake (first-time setup)..."
+        # Build the cmake command with vcpkg toolchain if available
+        # Using Ninja generator with CL compiler, and export compile_commands.json
+        $testFlag = if ($tests) { "-DBUILD_TESTS=ON" } else { "" }
+        $cmakeCmd = "cmake .. -G `"Ninja`" -DCMAKE_BUILD_TYPE=$BuildType -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $testFlag $vcpkgToolchain"
+        Invoke-Expression $cmakeCmd
+        if ($LASTEXITCODE -ne 0) {
+            throw "CMake configuration failed"
+        }
+    } else {
+        Write-ColorOutput Green "Skipping CMake configuration"
     }
 
     # Build with CMake
     Write-ColorOutput Yellow "Building project..."
+    $buildStartTime = Get-Date
     cmake --build . --config $BuildType --parallel
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed"
     }
+    $buildEndTime = Get-Date
+    $buildDuration = ($buildEndTime - $buildStartTime).TotalSeconds
 
-    Write-ColorOutput Green "Build completed successfully"
+    $totalEndTime = Get-Date
+    $totalDuration = ($totalEndTime - $totalStartTime).TotalSeconds
+
+    Write-ColorOutput Green "Build completed successfully in $([math]::Round($buildDuration, 2)) seconds"
+    Write-ColorOutput Cyan "Total time: $([math]::Round($totalDuration, 2)) seconds"
 
     # Run tests if requested
     if ($tests) {

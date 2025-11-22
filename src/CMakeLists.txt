@@ -83,7 +83,7 @@ add_executable(Jar
 if(WIN32)
     # Need console for debug purposes
     set_target_properties(Jar PROPERTIES
-        LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE"
+        LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE /INCREMENTAL"
         LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup"
         LINK_FLAGS_RELWITHDEBINFO "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup"
         LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup"
@@ -93,16 +93,16 @@ endif()
 ### Compiler Configuration
 if(MSVC)
     target_compile_options(Jar PRIVATE
-        /W4                 
-        /permissive-        
-        /Zc:__cplusplus    
-        /utf-8             
-        /wd4464             
-        /wd4820            
-        /wd5039           
-        $<$<CONFIG:Debug>:/Zi>  
-        $<$<CONFIG:Debug>:/Od>    
-        $<$<CONFIG:Release>:/O2> 
+        /W4
+        /permissive-
+        /Zc:__cplusplus
+        /utf-8
+        /wd4464
+        /wd4820
+        /wd5039
+        $<$<CONFIG:Debug>:/Zi>
+        $<$<CONFIG:Debug>:/Od>
+        $<$<CONFIG:Release>:/O2>
     )
 endif()
 
@@ -171,8 +171,6 @@ endif()
 ### Copy Shaders Directory
 add_custom_command(
     TARGET Jar POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E remove_directory
-        "$<TARGET_FILE_DIR:Jar>/shaders"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/shaders"
         "$<TARGET_FILE_DIR:Jar>/shaders"
@@ -182,8 +180,6 @@ add_custom_command(
 ### Copy Assets Directory
 add_custom_command(
     TARGET Jar POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E remove_directory
-        "$<TARGET_FILE_DIR:Jar>/assets"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets"
         "$<TARGET_FILE_DIR:Jar>/assets"

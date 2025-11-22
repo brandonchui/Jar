@@ -60,8 +60,7 @@ namespace SlangHelper
 
 		slang::TargetDesc targetDesc = {};
 		targetDesc.format = SLANG_DXIL;
-		// FIX Would like 6.8 shading model soon.
-		targetDesc.profile = globalSession->findProfile("sm_6_7");
+		targetDesc.profile = globalSession->findProfile("sm_6_8");
 		targetDesc.floatingPointMode = SLANG_FLOATING_POINT_MODE_FAST;
 		sessionDesc.targets = &targetDesc;
 		sessionDesc.targetCount = 1;
