@@ -35,6 +35,15 @@ Texture::Texture()
 
 Texture::~Texture()
 {
+	if (mDeferredUploadData && mDeferredUploadData->uploadAllocation)
+	{
+		mDeferredUploadData->uploadAllocation->Release();
+		mDeferredUploadData->uploadAllocation = nullptr;
+	}
+
+	if (!Graphics::gCommandListManager || !Graphics::gBindlessAllocator)
+		return;
+
 	if (mSrvAllocation.IsValid())
 	{
 		uint64_t lastSignaledFence =
@@ -132,13 +141,15 @@ bool Texture::UploadDeferredData(Graphics::GraphicsContext& context)
 	const UINT64 UPLOAD_BUFFER_SIZE = GetRequiredIntermediateSize(
 		mResource.Get(), 0, static_cast<UINT>(mDeferredUploadData->subresources.size()));
 
-	CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
+	D3D12MA::ALLOCATION_DESC allocDesc = {};
+	allocDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
+
 	CD3DX12_RESOURCE_DESC uploadBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(UPLOAD_BUFFER_SIZE);
 
-	//BUG use memory allocator
-	HRESULT hr = Graphics::gDevice->CreateCommittedResource(
-		&uploadHeapProps, D3D12_HEAP_FLAG_NONE, &uploadBufferDesc,
+	HRESULT hr = Graphics::gAllocator->CreateResource(
+		&allocDesc, &uploadBufferDesc,
 		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+		&mDeferredUploadData->uploadAllocation,
 		IID_PPV_ARGS(&mDeferredUploadData->uploadBuffer));
 
 	if (FAILED(hr))
@@ -184,11 +195,7 @@ void Texture::UploadToGPU()
 	uint64_t fenceValue = queue.ExecuteCommandList(uploadContext.GetCommandList());
 	queue.WaitForFence(fenceValue);
 
-	if (mDeferredUploadData)
-	{
-		mDeferredUploadData.reset();
-		sLogger->debug("Upload buffer cleared after GPU completion");
-	}
+	ClearUploadBuffer();
 
 	sLogger->info("GPU upload complete");
 }
@@ -197,6 +204,11 @@ void Texture::ClearUploadBuffer()
 {
 	if (mDeferredUploadData)
 	{
+		if (mDeferredUploadData->uploadAllocation)
+		{
+			mDeferredUploadData->uploadAllocation->Release();
+			mDeferredUploadData->uploadAllocation = nullptr;
+		}
 		mDeferredUploadData.reset();
 		sLogger->debug("Upload buffer cleared");
 	}

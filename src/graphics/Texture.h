@@ -3,6 +3,7 @@
 #include "BindlessAllocator.h"
 #include "GpuResource.h"
 #include <d3d12.h>
+#include <D3D12MemAlloc.h>
 #include <string>
 #include <memory>
 #include <vector>
@@ -83,10 +84,10 @@ private:
 
 	struct DeferredUploadData
 	{
-		// NOTE will most likely change the param name later
 		std::unique_ptr<uint8_t[]> ddsData;
 		std::vector<D3D12_SUBRESOURCE_DATA> subresources;
 		Microsoft::WRL::ComPtr<ID3D12Resource> uploadBuffer;
+		D3D12MA::Allocation* uploadAllocation = nullptr;
 	};
 
 	std::unique_ptr<DeferredUploadData> mDeferredUploadData;

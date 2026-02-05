@@ -1,6 +1,6 @@
 #pragma once
 #include "Scene.h"
-#include "MaterialAsset.h"
+#include "AssetManager.h"
 #include "graphics/Constants.h"
 #include "graphics/UploadBuffer.h"
 #include "graphics/StructuredBuffer.h"
@@ -15,7 +15,6 @@
 #include "ICamera.h"
 #include <memory>
 #include <vector>
-#include <unordered_map>
 #include <spdlog/spdlog.h>
 
 namespace Graphics
@@ -63,12 +62,7 @@ public:
 
 	void SetViewport(UINT width, UINT height);
 
-	std::shared_ptr<Mesh> LoadMesh(const std::string& objPath);
-	std::shared_ptr<Texture> LoadTexture(const std::wstring& ddsPath);
-
-	/// The JSON loader for some material that we defined as the
-	/// material .json metadata (in Assets/Material folder).
-	MaterialAsset LoadMaterialAsset(const std::string& materialName);
+	AssetManager* GetAssetManager() { return mAssetManager.get(); }
 
 	void AddSpotLight(const SpotLight& light);
 
@@ -101,10 +95,8 @@ public:
 private:
 	void InitLogger();
 
+	std::unique_ptr<AssetManager> mAssetManager;
 	std::unique_ptr<Scene> mScene;
-	std::unordered_map<std::string, std::shared_ptr<Mesh>> mMeshCache;
-	std::unordered_map<std::wstring, std::shared_ptr<Texture>> mTextureCache;
-	std::unordered_map<std::string, MaterialAsset> mMaterialLibrary;
 
 	DescriptorHeap mTextureHeap;
 	DescriptorHeap mSamplerHeap;

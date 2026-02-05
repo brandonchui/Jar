@@ -104,6 +104,7 @@ namespace Graphics
 
 	protected:
 		D3D12_COMMAND_LIST_TYPE mType = D3D12_COMMAND_LIST_TYPE_DIRECT;
+		uint64_t mLastSubmittedFence = 0;
 
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> mCommandList;
 		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> mAllocator;

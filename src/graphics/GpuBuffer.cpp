@@ -13,6 +13,9 @@ GpuBuffer::GpuBuffer()
 
 GpuBuffer::~GpuBuffer()
 {
+	if (!Graphics::gCommandListManager || !Graphics::gBindlessAllocator)
+		return;
+
 	uint64_t lastSignaledFence =
 		Graphics::gCommandListManager->GetGraphicsQueue().GetLastSignaledFenceValue();
 

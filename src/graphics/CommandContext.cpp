@@ -52,7 +52,12 @@ namespace Graphics
 
 	void CommandContext::Begin()
 	{
-		// Start fresh for every new frame
+		if (mLastSubmittedFence > 0)
+		{
+			auto& queue = gCommandListManager->GetGraphicsQueue();
+			queue.WaitForFence(mLastSubmittedFence);
+		}
+
 		HRESULT hr = mAllocator->Reset();
 		assert(SUCCEEDED(hr) && "Failed to reset command allocator");
 
@@ -82,10 +87,9 @@ namespace Graphics
 		HRESULT hr = mCommandList->Close();
 		assert(SUCCEEDED(hr) && "Failed to close command list");
 
-		// NOTE Misleading name for GetGraphicsQueue(), will work for
-		// both graphics and compute pipelines.
 		auto& queue = gCommandListManager->GetGraphicsQueue();
-		return queue.ExecuteCommandList(mCommandList.Get());
+		mLastSubmittedFence = queue.ExecuteCommandList(mCommandList.Get());
+		return mLastSubmittedFence;
 	}
 
 	void CommandContext::ExecuteAndWait()
@@ -197,18 +201,17 @@ namespace Graphics
 		// Creating the PSO
 		if (shaderData.rootSignature != nullptr)
 		{
-			mRootSignature.Attach(shaderData.rootSignature);
-
 			sLogger->debug("Creating PSO...");
 			ID3D12PipelineState* pso = SlangHelper::CreatePSOWithSlangShader(
 				shaderData, Graphics::gDevice, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT);
 
 			if (pso != nullptr)
 			{
-				mPipelineState.Attach(pso);
-				sLogger->info("PSO created and attached");
-
-				Graphics::gShaderCache->Store(cacheKey, mRootSignature.Get(), mPipelineState.Get());
+				Graphics::gShaderCache->Store(cacheKey, shaderData.rootSignature, pso);
+				auto* cached = Graphics::gShaderCache->Get(cacheKey);
+				mRootSignature = cached->rootSignature;
+				mPipelineState = cached->pipelineState;
+				sLogger->info("PSO created and cached");
 			}
 			else
 			{
@@ -283,18 +286,17 @@ namespace Graphics
 
 		if (shaderData.rootSignature != nullptr)
 		{
-			mRootSignature.Attach(shaderData.rootSignature);
-
 			sLogger->debug("Creating MRT PSO with {} render targets...", numRenderTargets);
 			ID3D12PipelineState* pso = SlangHelper::CreatePSOWithSlangShaderMRT(
 				shaderData, Graphics::gDevice, rtFormats, numRenderTargets, depthStencilFormat);
 
 			if (pso != nullptr)
 			{
-				mPipelineState.Attach(pso);
-				sLogger->info("MRT PSO created and attached");
-
-				Graphics::gShaderCache->Store(cacheKey, mRootSignature.Get(), mPipelineState.Get());
+				Graphics::gShaderCache->Store(cacheKey, shaderData.rootSignature, pso);
+				auto* cached = Graphics::gShaderCache->Get(cacheKey);
+				mRootSignature = cached->rootSignature;
+				mPipelineState = cached->pipelineState;
+				sLogger->info("MRT PSO created and cached");
 			}
 			else
 			{
@@ -336,17 +338,16 @@ namespace Graphics
 
 		if (shaderData.rootSignature != nullptr)
 		{
-			mRootSignature.Attach(shaderData.rootSignature);
-
 			ID3D12PipelineState* pso =
 				SlangHelper::CreateComputePSOWithSlangShader(shaderData, Graphics::gDevice);
 
 			if (pso != nullptr)
 			{
-				mPipelineState.Attach(pso);
-				sLogger->info("Compute PSO created and attached");
-
-				Graphics::gShaderCache->Store(cacheKey, mRootSignature.Get(), mPipelineState.Get());
+				Graphics::gShaderCache->Store(cacheKey, shaderData.rootSignature, pso);
+				auto* cached = Graphics::gShaderCache->Get(cacheKey);
+				mRootSignature = cached->rootSignature;
+				mPipelineState = cached->pipelineState;
+				sLogger->info("Compute PSO created and cached");
 			}
 			else
 			{

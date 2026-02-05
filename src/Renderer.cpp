@@ -1,4 +1,5 @@
 #include "Renderer.h"
+#include "AssetManager.h"
 #include "OrbitCamera.h"
 #include "graphics/Core.h"
 #include "ui/UISystem.h"
@@ -98,6 +99,9 @@ void Renderer::Initialize(UISystem* uiSystem)
 	mTextureHeap.Create(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024, true);
 	mSamplerHeap.Create(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 16, true);
 
+	mAssetManager = std::make_unique<AssetManager>();
+	mAssetManager->Initialize(&mTextureHeap);
+
 	const float ASPECT_RATIO = (mViewport.Width > 0.0F && mViewport.Height > 0.0F)
 								   ? mViewport.Width / mViewport.Height
 								   : 16.0F / 9.0F;
@@ -111,13 +115,13 @@ void Renderer::Initialize(UISystem* uiSystem)
 	// ---
 	//NOTE Due to remove as it is hard coded.
 	// Loading materials
-	auto mesh = LoadMesh("assets/ball.obj");
-	MaterialAsset plasticMat = LoadMaterialAsset("green_plastic");
-	MaterialAsset rustMat = LoadMaterialAsset("rust");
-	MaterialAsset goldMat = LoadMaterialAsset("gold");
-	MaterialAsset stoneMat = LoadMaterialAsset("stone");
-	MaterialAsset woodMat = LoadMaterialAsset("wooden_gate");
-	MaterialAsset brushedMetalMat = LoadMaterialAsset("brushed_metal");
+	auto mesh = mAssetManager->LoadMesh("assets/ball.obj");
+	MaterialAsset plasticMat = mAssetManager->LoadMaterialAsset("green_plastic");
+	MaterialAsset rustMat = mAssetManager->LoadMaterialAsset("rust");
+	MaterialAsset goldMat = mAssetManager->LoadMaterialAsset("gold");
+	MaterialAsset stoneMat = mAssetManager->LoadMaterialAsset("stone");
+	MaterialAsset woodMat = mAssetManager->LoadMaterialAsset("wooden_gate");
+	MaterialAsset brushedMetalMat = mAssetManager->LoadMaterialAsset("brushed_metal");
 
 	if (mesh)
 	{
@@ -785,170 +789,6 @@ void Renderer::SetViewport(UINT width, UINT height)
 	{
 		mCamera->SetAspectRatio(static_cast<float>(width) / static_cast<float>(height));
 	}
-}
-
-std::shared_ptr<Mesh> Renderer::LoadMesh(const std::string& objPath)
-{
-	auto it = mMeshCache.find(objPath);
-	if (it != mMeshCache.end())
-	{
-		mLogger->info("Using cached mesh: {}", objPath);
-		return it->second;
-	}
-
-	mLogger->info("Loading mesh: {}", objPath);
-
-	auto mesh = std::make_shared<Mesh>();
-
-	if (!mesh->LoadFromOBJ(objPath))
-	{
-		mLogger->error("Failed to load mesh");
-		return nullptr;
-	}
-
-	mesh->UploadToGPU();
-
-	mLogger->info("Mesh loaded successfully");
-	return mMeshCache[objPath] = mesh;
-}
-
-std::shared_ptr<Texture> Renderer::LoadTexture(const std::wstring& ddsPath)
-{
-	auto it = mTextureCache.find(ddsPath);
-	if (it != mTextureCache.end())
-	{
-		mLogger->info("Using cached texture: {}", std::string(ddsPath.begin(), ddsPath.end()));
-		return it->second;
-	}
-
-	mLogger->info("Loading texture: {}", std::string(ddsPath.begin(), ddsPath.end()));
-
-	auto texture = std::make_shared<Texture>();
-
-	if (!texture->LoadFromFile(ddsPath))
-	{
-		mLogger->error("Failed to load texture");
-		return nullptr;
-	}
-
-	texture->UploadToGPU();
-
-	DescriptorHandle textureHandle = mTextureHeap.Alloc(1);
-	texture->CreateSRV(textureHandle.GetCpuHandle());
-	texture->SetSRVHandles(textureHandle.GetCpuHandle(), textureHandle.GetGpuHandle());
-
-	mLogger->info("Texture loaded successfully");
-	return mTextureCache[ddsPath] = texture;
-}
-
-MaterialAsset Renderer::LoadMaterialAsset(const std::string& materialName)
-{
-	// NOTE This is horribly hard coded in the asset folder.
-	auto it = mMaterialLibrary.find(materialName);
-	if (it != mMaterialLibrary.end())
-	{
-		mLogger->info("Using cached material: {}", materialName);
-		return it->second;
-	}
-
-	mLogger->info("Loading material: {}", materialName);
-
-	MaterialAsset mat;
-	mat.name = materialName;
-
-	std::string jsonPath = "assets/materials/" + materialName + "/material.json";
-	std::ifstream file(jsonPath);
-
-	if (!file.is_open())
-	{
-		mLogger->error("Failed to open material file: {}", jsonPath);
-		return mat;
-	}
-
-	try
-	{
-		nlohmann::json j;
-		file >> j;
-
-		// std::string basePath = "assets/materials/" + materialName + "/";
-
-		if (j.contains("albedo") && !j["albedo"].get<std::string>().empty())
-		{
-			std::string albedoPath = j["albedo"].get<std::string>();
-			mat.albedoTexture = LoadTexture(std::wstring(albedoPath.begin(), albedoPath.end()));
-		}
-
-		if (j.contains("normal") && !j["normal"].get<std::string>().empty())
-		{
-			std::string normalPath = j["normal"].get<std::string>();
-			mat.normalTexture = LoadTexture(std::wstring(normalPath.begin(), normalPath.end()));
-		}
-
-		if (j.contains("metallic") && !j["metallic"].get<std::string>().empty())
-		{
-			std::string metallicPath = j["metallic"].get<std::string>();
-			mat.metallicTexture =
-				LoadTexture(std::wstring(metallicPath.begin(), metallicPath.end()));
-		}
-
-		if (j.contains("roughness") && !j["roughness"].get<std::string>().empty())
-		{
-			std::string roughnessPath = j["roughness"].get<std::string>();
-			mat.roughnessTexture =
-				LoadTexture(std::wstring(roughnessPath.begin(), roughnessPath.end()));
-		}
-
-		if (j.contains("ao") && !j["ao"].get<std::string>().empty())
-		{
-			std::string aoPath = j["ao"].get<std::string>();
-			mat.aoTexture = LoadTexture(std::wstring(aoPath.begin(), aoPath.end()));
-		}
-
-		if (j.contains("emissive") && !j["emissive"].get<std::string>().empty())
-		{
-			std::string emissivePath = j["emissive"].get<std::string>();
-			mat.emissiveTexture =
-				LoadTexture(std::wstring(emissivePath.begin(), emissivePath.end()));
-		}
-
-		if (j.contains("albedoColor") && j["albedoColor"].is_array() &&
-			j["albedoColor"].size() >= 3)
-		{
-			mat.albedoColor =
-				Vector4(j["albedoColor"][0].get<float>(), j["albedoColor"][1].get<float>(),
-						j["albedoColor"][2].get<float>(),
-						j["albedoColor"].size() >= 4 ? j["albedoColor"][3].get<float>() : 1.0F);
-		}
-
-		if (j.contains("emissiveFactor") && j["emissiveFactor"].is_array() &&
-			j["emissiveFactor"].size() >= 3)
-		{
-			mat.emissiveFactor = Vector3(j["emissiveFactor"][0].get<float>(),
-										 j["emissiveFactor"][1].get<float>(),
-										 j["emissiveFactor"][2].get<float>());
-		}
-
-		if (j.contains("metallicFactor"))
-			mat.metallicFactor = j["metallicFactor"].get<float>();
-
-		if (j.contains("roughnessFactor"))
-			mat.roughnessFactor = j["roughnessFactor"].get<float>();
-
-		if (j.contains("normalStrength"))
-			mat.normalStrength = j["normalStrength"].get<float>();
-
-		if (j.contains("aoStrength"))
-			mat.aoStrength = j["aoStrength"].get<float>();
-
-		mMaterialLibrary[materialName] = mat;
-		mLogger->info("Material '{}' loaded successfully", materialName);
-	}
-	catch (const nlohmann::json::exception& e)
-	{
-		mLogger->error("Failed to parse material JSON: {}", e.what());
-	}
-
-	return mat;
 }
 
 void Renderer::AddSpotLight(const SpotLight& light)

@@ -518,6 +518,13 @@ void Graphics::Shutdown()
 		queue.WaitForFence(fence);
 	}
 
+	if (gBindlessAllocator)
+	{
+		gBindlessAllocator->Shutdown();
+		delete gBindlessAllocator;
+		gBindlessAllocator = nullptr;
+	}
+
 	if (gGraphicsContext)
 	{
 		gGraphicsContext->Shutdown();
@@ -544,13 +551,6 @@ void Graphics::Shutdown()
 		i = nullptr;
 	}
 	DescriptorAllocator::DestroyAll();
-
-	if (gBindlessAllocator)
-	{
-		gBindlessAllocator->Shutdown();
-		delete gBindlessAllocator;
-		gBindlessAllocator = nullptr;
-	}
 
 	if (gAllocator != nullptr)
 	{

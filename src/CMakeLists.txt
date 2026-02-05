@@ -6,6 +6,8 @@ add_executable(Jar
     Config.h
     Renderer.cpp
     Renderer.h
+    AssetManager.cpp
+    AssetManager.h
     Mesh.cpp
     Mesh.h
     Material.h

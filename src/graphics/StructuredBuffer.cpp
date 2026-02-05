@@ -27,7 +27,23 @@ namespace Graphics
 
 	StructuredBuffer::~StructuredBuffer()
 	{
-		//clean up
+		if (!gCommandListManager || !gBindlessAllocator)
+			return;
+
+		uint64_t lastSignaledFence =
+			gCommandListManager->GetGraphicsQueue().GetLastSignaledFenceValue();
+
+		if (mSrvAllocation.IsValid())
+		{
+			gBindlessAllocator->FreeDeferred(mSrvAllocation, lastSignaledFence);
+			mSrvAllocation.Reset();
+		}
+
+		if (mUavAllocation.IsValid())
+		{
+			gBindlessAllocator->FreeDeferred(mUavAllocation, lastSignaledFence);
+			mUavAllocation.Reset();
+		}
 	}
 
 	void StructuredBuffer::Create(const std::wstring& name, uint32_t numElements,
