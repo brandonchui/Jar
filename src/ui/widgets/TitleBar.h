@@ -10,7 +10,8 @@ namespace UI
 	{
 		None,
 		Close,
-		OpenPreferences
+		OpenPreferences,
+		LoadModel
 	};
 
 	struct TitleBarState

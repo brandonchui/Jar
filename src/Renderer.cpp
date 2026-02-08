@@ -112,56 +112,8 @@ void Renderer::Initialize(UISystem* uiSystem)
 
 	mScene = std::make_unique<Scene>();
 
-	// ---
-	//NOTE Due to remove as it is hard coded.
-	// Loading materials
-	auto mesh = mAssetManager->LoadMesh("assets/ball.obj");
-	MaterialAsset plasticMat = mAssetManager->LoadMaterialAsset("green_plastic");
-	MaterialAsset rustMat = mAssetManager->LoadMaterialAsset("rust");
-	MaterialAsset goldMat = mAssetManager->LoadMaterialAsset("gold");
-	MaterialAsset stoneMat = mAssetManager->LoadMaterialAsset("stone");
-	MaterialAsset woodMat = mAssetManager->LoadMaterialAsset("wooden_gate");
-	MaterialAsset brushedMetalMat = mAssetManager->LoadMaterialAsset("brushed_metal");
-
-	if (mesh)
-	{
-		const float SPACING = 20.0F;
-		const float VERTICAL_SPACING = 20.0F;
-
-		std::vector<MaterialAsset*> materials = {&plasticMat, &rustMat,	 &woodMat,
-												 &goldMat,	  &stoneMat, &brushedMetalMat};
-		std::vector<std::string> materialNames = {"green_plastic", "rust",	"wooden_gate",
-												  "gold",		   "stone", "brushed_metal"};
-
-		for (size_t i = 0; i < 6; ++i)
-		{
-			std::string name = "Sphere_" + materialNames[i];
-			Entity* entity = mScene->AddEntity(name, mesh);
-
-			if (entity)
-			{
-				size_t row = i / 3;
-				size_t col = i % 3;
-
-				float posX = (static_cast<float>(col) - 1) * SPACING;
-				float posZ = static_cast<float>(row) * VERTICAL_SPACING;
-				entity->GetTransform().position = Vector3(posX, 0.0F, posZ);
-
-				MaterialAsset* mat = materials[i];
-				entity->GetMaterial().mAlbedoTexture = mat->albedoTexture;
-				entity->GetMaterial().mNormalTexture = mat->normalTexture;
-				entity->GetMaterial().mMetallicTexture = mat->metallicTexture;
-				entity->GetMaterial().mRoughnessTexture = mat->roughnessTexture;
-				entity->GetMaterial().mAmbientOcclusionTexture = mat->aoTexture;
-				entity->GetMaterial().mAlbedoColor = mat->albedoColor;
-				entity->GetMaterial().mMetallicFactor = mat->metallicFactor;
-				entity->GetMaterial().mRoughnessFactor = mat->roughnessFactor;
-				entity->GetMaterial().mNormalStrength = mat->normalStrength;
-				entity->GetMaterial().mAmbientOcclusionFactor = mat->aoStrength;
-			}
-		}
-	}
-	// ---
+	// Hardcoded test assets removed — models are now loaded via
+	// drag-and-drop or File > Load Model at runtime.
 
 	mLogger->info("Scene has {} entities", mScene->GetEntities().size());
 
@@ -213,15 +165,12 @@ void Renderer::Initialize(UISystem* uiSystem)
 	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
 	Graphics::gDevice->CreateSampler(&samplerDesc, mSamplerHandle.GetCpuHandle());
 
-	// Offscreen viewport render target, allow UAV
 	mViewportTexture = std::make_unique<ColorBuffer>();
 	mViewportTexture->Create(L"ViewportTexture", mViewportWidth, mViewportHeight, 1,
 							 DXGI_FORMAT_R8G8B8A8_UNORM, true);
 
-	// Post process blur after, allow UAV
-	mBlurTempTexture = std::make_unique<ColorBuffer>();
-	mBlurTempTexture->Create(L"BlurTempTexture", mViewportWidth, mViewportHeight, 1,
-							 DXGI_FORMAT_R8G8B8A8_UNORM, true);
+	mPostProcessor = std::make_unique<PostProcessor>();
+	mPostProcessor->Initialize(mViewportWidth, mViewportHeight, &mTextureHeap);
 
 	// Depth buffer for viewport
 	mViewportDepth = std::make_unique<DepthBuffer>();
@@ -264,27 +213,12 @@ void Renderer::Initialize(UISystem* uiSystem)
 	mGBuffer->GetDepthBuffer().CreateSRV(srvHandle);
 #endif
 
-	// SRV for ImGui to sample the viewport texture
-	// NOTE: Allocate from ImGui's heap so it can reference it when rendering
 	mViewportSRV = uiSystem->AllocateDescriptor(1);
 	mViewportTexture->CreateSRV(mViewportSRV.GetCpuHandle());
 
-	// Post process initialization SRV,UAV
 #ifdef ENABLE_BINDLESS
 	mViewportTexture->CreateSRV({});
 	mViewportTexture->CreateUAV({});
-	mBlurTempTexture->CreateSRV({});
-	mBlurTempTexture->CreateUAV({});
-#else
-	mViewportTextureSRV = mTextureHeap.Alloc(1);
-	mViewportTextureUAV = mTextureHeap.Alloc(1);
-	mBlurTempSRV = mTextureHeap.Alloc(1);
-	mBlurTempUAV = mTextureHeap.Alloc(1);
-
-	mViewportTexture->CreateSRV(mViewportTextureSRV.GetCpuHandle());
-	mViewportTexture->CreateUAV(mViewportTextureUAV.GetCpuHandle());
-	mBlurTempTexture->CreateSRV(mBlurTempSRV.GetCpuHandle());
-	mBlurTempTexture->CreateUAV(mBlurTempUAV.GetCpuHandle());
 #endif
 
 	mLogger->info("Viewport offscreen texture created: {}x{}", mViewportWidth, mViewportHeight);
@@ -642,132 +576,14 @@ void Renderer::Render(Graphics::GraphicsContext& context)
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.DrawInstanced(3, 1);
 
-	// POST PROCESS
-#ifdef USE_PIX
-	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(200), "Post-Process");
-#endif
-
-	///// Blur
-#ifdef USE_PIX
-	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(210), "Gaussian Blur");
-#endif
-
-	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	context.TransitionResource(*mBlurTempTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-	// Horiziontal
-#ifdef USE_PIX
-	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(211), "Blur Horizontal");
-#endif
-
-#ifdef ENABLE_BINDLESS
-	context.SetDescriptorHeaps(Graphics::gBindlessAllocator->GetHeap(),
-							   mSamplerHeap.GetHeapPointer());
-#else
-	context.SetDescriptorHeaps(mTextureHeap);
-#endif
-
-	context.SetComputeShader("BlurHorizontal");
-	context.BindComputePipeline();
-
-	context.SetComputeConstants(0, 1, &mBlurIntensity);
-
-#ifdef ENABLE_BINDLESS
-	{
-		struct ComputeResources
-		{
-			DirectX::XMUINT2 mInputTex;
-			DirectX::XMUINT2 mOutputTex;
-		};
-
-		ComputeResources resources = {};
-
-		resources.mInputTex.x = mViewportTexture->GetSRVIndex();
-		resources.mInputTex.y = 0;
-
-		resources.mOutputTex.x = mBlurTempTexture->GetUAVIndex();
-		resources.mOutputTex.y = 0;
-
-		context.GetCommandList()->SetComputeRoot32BitConstants(1, 4, &resources, 0);
-	}
-#else
-	context.SetComputeRootDescriptorTable(1, mViewportTextureSRV);
-	context.SetComputeRootDescriptorTable(2, mBlurTempUAV);
-#endif
-
-	uint32_t groupsX = (mViewportWidth + 7) / 8;
-	uint32_t groupsY = (mViewportHeight + 7) / 8;
-	context.Dispatch(groupsX, groupsY, 1);
+	mPostProcessor->ApplyBlur(context, *mViewportTexture, &mSamplerHeap);
 
 #ifdef USE_PIX
-	PIXEndEvent(context.GetCommandList());
-#endif
-
-	context.TransitionResource(*mBlurTempTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-	// Vertical
-#ifdef USE_PIX
-	PIXBeginEvent(context.GetCommandList(), PIX_COLOR_INDEX(212), "Blur Vertical");
-#endif
-
-#ifdef ENABLE_BINDLESS
-	context.SetDescriptorHeaps(Graphics::gBindlessAllocator->GetHeap(),
-							   mSamplerHeap.GetHeapPointer());
-#else
-	context.SetDescriptorHeaps(mTextureHeap);
-#endif
-
-	context.SetComputeShader("BlurVertical");
-	context.BindComputePipeline();
-
-	context.SetComputeConstants(0, 1, &mBlurIntensity);
-
-#ifdef ENABLE_BINDLESS
-	{
-		struct ComputeResources
-		{
-			DirectX::XMUINT2 mInputTex;
-			DirectX::XMUINT2 mOutputTex;
-		};
-
-		ComputeResources resources = {};
-
-		resources.mInputTex.x = mBlurTempTexture->GetSRVIndex();
-		resources.mInputTex.y = 0;
-
-		resources.mOutputTex.x = mViewportTexture->GetUAVIndex();
-		resources.mOutputTex.y = 0;
-
-		context.GetCommandList()->SetComputeRoot32BitConstants(1, 4, &resources, 0);
-	}
-#else
-	context.SetComputeRootDescriptorTable(1, mBlurTempSRV);
-	context.SetComputeRootDescriptorTable(2, mViewportTextureUAV);
-#endif
-
-	context.Dispatch(groupsX, groupsY, 1);
-
-#ifdef USE_PIX
-	PIXEndEvent(context.GetCommandList());
-#endif
-
-	context.TransitionResource(*mViewportTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-#ifdef USE_PIX
-	PIXEndEvent(context.GetCommandList()); // Gaussian Blur
+	PIXEndEvent(context.GetCommandList()); // Lighting Pass
 #endif
 
 #ifdef USE_PIX
-	PIXEndEvent(context.GetCommandList()); // Post-Process
-#endif
-
-#ifdef USE_PIX
-	PIXEndEvent(context.GetCommandList());
-#endif
-
-#ifdef USE_PIX
-	PIXEndEvent(context.GetCommandList()); // End Frame
+	PIXEndEvent(context.GetCommandList()); // Frame
 #endif
 }
 
@@ -810,6 +626,22 @@ void Renderer::AddSpotLight(const SpotLight& light)
 	mLogger->info("Added spot light. Total lights: {}", mSpotLights.size());
 }
 
+void Renderer::LoadOBJ(const std::string& filePath)
+{
+	auto mesh = mAssetManager->LoadMesh(filePath);
+	if (!mesh)
+	{
+		mLogger->error("Failed to load OBJ: {}", filePath);
+		return;
+	}
+
+	std::filesystem::path path(filePath);
+	std::string name = path.stem().string();
+
+	mScene->AddEntity(name, mesh);
+	mLogger->info("Loaded OBJ '{}' as entity '{}'", filePath, name);
+}
+
 void Renderer::ResizeViewport(uint32_t width, uint32_t height)
 {
 	if (width == mViewportWidth && height == mViewportHeight)
@@ -821,17 +653,11 @@ void Renderer::ResizeViewport(uint32_t width, uint32_t height)
 	mViewportWidth = width;
 	mViewportHeight = height;
 
-	// Resetting the ColorBuffers since we have to recreate a new one.
 	mViewportTexture.reset();
 	mViewportDepth.reset();
-	mBlurTempTexture.reset();
 
 	mViewportTexture = std::make_unique<ColorBuffer>();
 	mViewportTexture->Create(L"ViewportTexture", mViewportWidth, mViewportHeight, 1,
-							 DXGI_FORMAT_R8G8B8A8_UNORM, true);
-
-	mBlurTempTexture = std::make_unique<ColorBuffer>();
-	mBlurTempTexture->Create(L"BlurTempTexture", mViewportWidth, mViewportHeight, 1,
 							 DXGI_FORMAT_R8G8B8A8_UNORM, true);
 
 	mViewportDepth = std::make_unique<DepthBuffer>();
@@ -841,18 +667,12 @@ void Renderer::ResizeViewport(uint32_t width, uint32_t height)
 
 	mViewportTexture->CreateSRV(mViewportSRV.GetCpuHandle());
 
-	// Recreate blur descriptors for post process
 #ifdef ENABLE_BINDLESS
 	mViewportTexture->CreateSRV({});
 	mViewportTexture->CreateUAV({});
-	mBlurTempTexture->CreateSRV({});
-	mBlurTempTexture->CreateUAV({});
-#else
-	mViewportTexture->CreateSRV(mViewportTextureSRV.GetCpuHandle());
-	mViewportTexture->CreateUAV(mViewportTextureUAV.GetCpuHandle());
-	mBlurTempTexture->CreateSRV(mBlurTempSRV.GetCpuHandle());
-	mBlurTempTexture->CreateUAV(mBlurTempUAV.GetCpuHandle());
 #endif
+
+	mPostProcessor->Resize(mViewportWidth, mViewportHeight);
 
 	if (mGBuffer)
 	{

@@ -1,6 +1,7 @@
 #pragma once
 #include "Scene.h"
 #include "AssetManager.h"
+#include "PostProcessor.h"
 #include "graphics/Constants.h"
 #include "graphics/UploadBuffer.h"
 #include "graphics/StructuredBuffer.h"
@@ -64,6 +65,8 @@ public:
 
 	AssetManager* GetAssetManager() { return mAssetManager.get(); }
 
+	void LoadOBJ(const std::string& filePath);
+
 	void AddSpotLight(const SpotLight& light);
 
 	Scene* GetScene() const { return mScene.get(); }
@@ -88,9 +91,8 @@ public:
 	/// displays it 1:1 in the viewport widget wherever it's docked.
 	void ResizeViewport(uint32_t width, uint32_t height);
 
-	/// Post process
-	float GetBlurIntensity() const { return mBlurIntensity; }
-	void SetBlurIntensity(float intensity) { mBlurIntensity = intensity; }
+	float GetBlurIntensity() const { return mPostProcessor ? mPostProcessor->GetBlurIntensity() : 0.0F; }
+	void SetBlurIntensity(float intensity) { if (mPostProcessor) mPostProcessor->SetBlurIntensity(intensity); }
 
 private:
 	void InitLogger();
@@ -134,17 +136,7 @@ private:
 
 	std::unique_ptr<GBuffer> mGBuffer;
 
-	/// Blur post process intermediate texture since we can not modify
-	/// in place of the textures.
-	std::unique_ptr<ColorBuffer> mBlurTempTexture;
-
-	DescriptorHandle mViewportTextureSRV;
-	DescriptorHandle mViewportTextureUAV;
-
-	DescriptorHandle mBlurTempSRV;
-	DescriptorHandle mBlurTempUAV;
-
-	float mBlurIntensity = 0.0F;
+	std::unique_ptr<PostProcessor> mPostProcessor;
 
 	/// Probably misleading naming, the this viewport width and height
 	/// are for the actual texture generated for the viewport widget.

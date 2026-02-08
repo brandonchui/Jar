@@ -8,6 +8,8 @@ add_executable(Jar
     Renderer.h
     AssetManager.cpp
     AssetManager.h
+    PostProcessor.cpp
+    PostProcessor.h
     Mesh.cpp
     Mesh.h
     Material.h
@@ -139,6 +141,7 @@ target_link_libraries(Jar PRIVATE
     d3dcompiler.lib
     dxguid.lib
     shell32.lib
+    comdlg32.lib
 )
 
 ### Link vcpkg libraries

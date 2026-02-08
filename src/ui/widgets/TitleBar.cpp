@@ -77,11 +77,11 @@ namespace UI
 			{
 				if (ImGui::MenuItem("Load Model"))
 				{
-					// TODO action
+					state.action = TitleBarAction::LoadModel;
 				}
 				if (ImGui::MenuItem("Exit"))
 				{
-					// TODO action
+					state.action = TitleBarAction::Close;
 				}
 				ImGui::EndMenu();
 			}

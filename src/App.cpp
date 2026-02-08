@@ -20,8 +20,12 @@
 #include "ui/widgets/Properties.h"
 #include "imgui.h"
 
+#include <filesystem>
+#include <algorithm>
+
 #ifdef _WIN32
 #include <shellapi.h>
+#include <commdlg.h>
 #endif
 
 App::App() = default;
@@ -255,9 +259,22 @@ bool App::ProcessEvent(const SDL_Event& event)
 		break;
 
 	case SDL_EVENT_DROP_FILE:
-		if (event.drop.data != nullptr && mLogger)
+		if (event.drop.data != nullptr && mRenderer)
 		{
-			mLogger->info("File dropped: {}", event.drop.data);
+			std::filesystem::path dropped(event.drop.data);
+			std::string ext = dropped.extension().string();
+			std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+			if (ext == ".obj")
+			{
+				mRenderer->LoadOBJ(event.drop.data);
+				if (mLogger)
+					mLogger->info("Loaded dropped file: {}", event.drop.data);
+			}
+			else if (mLogger)
+			{
+				mLogger->warn("Unsupported file type: {}", ext);
+			}
 		}
 		break;
 
@@ -388,6 +405,25 @@ void App::RenderUI()
 				mLogger->info("Opening preferences: {}", settingsPath.string());
 			}
 		}
+	}
+	else if (titleBarState.action == UI::TitleBarAction::LoadModel)
+	{
+#ifdef _WIN32
+		wchar_t filePath[MAX_PATH] = {};
+		OPENFILENAMEW ofn = {};
+		ofn.lStructSize = sizeof(ofn);
+		ofn.hwndOwner = GetHwnd();
+		ofn.lpstrFilter = L"OBJ Files (*.obj)\0*.obj\0All Files (*.*)\0*.*\0";
+		ofn.lpstrFile = filePath;
+		ofn.nMaxFile = MAX_PATH;
+		ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+
+		if (GetOpenFileNameW(&ofn))
+		{
+			std::filesystem::path p(filePath);
+			mRenderer->LoadOBJ(p.string());
+		}
+#endif
 	}
 
 	/// Create dockspace below title bar (from the docking branch).
